@@ -31,12 +31,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //----------------------------------------------------------------------------------
-#include "SLWrapper.h" 
+#include "SLWrapper.h"
 
 #include <donut/core/log.h>
 #include <filesystem>
 #include <dxgi.h>
 #include <dxgi1_5.h>
+#include <Windows.h>
 
 
 #if DONUT_WITH_DX11
@@ -219,6 +220,9 @@ bool SLWrapper::Initialize_preDevice(nvrhi::GraphicsAPI api)
 #endif
 #ifdef STREAMLINE_FEATURE_DEEPDVC
         sl::kFeatureDeepDVC,
+#endif
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+        sl::kFeatureFGSR_SR,
 #endif
 #ifdef STREAMLINE_FEATURE_LATEWARP
         sl::kFeatureLatewarp,
@@ -488,6 +492,21 @@ void SLWrapper::UpdateFeatureAvailable(donut::app::DeviceManager* deviceManager)
     else log::warning("DeepDVC is not fully functional on this system.");
 #endif
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    OutputDebugStringA("=== FGSR_SR check START ===\n");
+    // MessageBoxA(NULL, "FGSR_SR check reached", "Debug", MB_OK);
+
+    sl::FeatureRequirements fgsr_sr_requirements;
+    slGetFeatureRequirements(sl::kFeatureFGSR_SR, fgsr_sr_requirements);
+    LogFeatureRequirements("FGSR_SR", fgsr_sr_requirements);
+
+    m_fgsr_sr_available = slIsFeatureSupported(sl::kFeatureFGSR_SR, adapterInfo) == sl::Result::eOk;
+    if (m_fgsr_sr_available) {
+        // MessageBoxA(NULL, "FGSR_SR is SUPPORTED!", "Debug", MB_OK);
+    } else {
+        // MessageBoxA(NULL, "FGSR_SR is NOT supported!", "Debug", MB_OK);
+    }
+#endif
 #ifdef STREAMLINE_FEATURE_LATEWARP
     sl::FeatureRequirements latewarp_requirements;
     slGetFeatureRequirements(sl::kFeatureLatewarp, latewarp_requirements);
@@ -694,6 +713,49 @@ void SLWrapper::CleanupNIS(bool wfi) {
     // add an exception for eErrorMissingOrInvalidAPI for NIS plugin that doesn't export slFreeResources
     successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_NIS");
 }
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+// Function pointer type for slSetFGSR_SRConstants
+using PFun_slSetFGSR_SRConstants = sl::Result(const void* data, uint32_t frameIndex, uint32_t id);
+static PFun_slSetFGSR_SRConstants* s_slSetFGSR_SRConstants = nullptr;
+
+void SLWrapper::SetFGSR_SROptions(const sl::FGSR_SRConstants consts)
+{
+    // // MessageBoxA(NULL, "SetFGSR_SROptions called!", "Debug", MB_OK);
+
+    if (!m_sl_initialised || !m_fgsr_sr_available) {
+        // // MessageBoxA(NULL, "SL not init or FGSR_SR not available!", "Debug", MB_OK);
+        return;
+    }
+
+    m_fgsr_sr_consts = consts;
+
+    // Get function pointer if not cached
+    if (!s_slSetFGSR_SRConstants) {
+        sl::Result res = slGetFeatureFunction(sl::kFeatureFGSR_SR, "slSetFGSR_SRConstants", (void*&)s_slSetFGSR_SRConstants);
+        if (res != sl::Result::eOk) {
+            // // MessageBoxA(NULL, "Failed to get function pointer!", "Debug", MB_OK);
+            return;
+        }
+        // // MessageBoxA(NULL, "Got function pointer OK!", "Debug", MB_OK);
+    }
+
+    // FGSR_SR uses uint32_t viewport ID, not ViewportHandle
+    char buf[512];
+    sprintf(buf, "SetConstants:\nviewport=%u\nrenderExtents=%.1f x %.1f\npresentationExtents=%.1f x %.1f\nmode=%d\nsizeof(FGSR_SRConstants)=%zu\nsizeof(BaseStructure)=%zu",
+        (uint32_t)m_viewport,
+        m_fgsr_sr_consts.renderExtents.x, m_fgsr_sr_consts.renderExtents.y,
+        m_fgsr_sr_consts.presentationExtents.x, m_fgsr_sr_consts.presentationExtents.y,
+        (int)m_fgsr_sr_consts.mode,
+        sizeof(sl::FGSR_SRConstants),
+        sizeof(sl::BaseStructure));
+    // // MessageBoxA(NULL, buf, "Debug - Set", MB_OK);
+
+    sl::Result callRes = s_slSetFGSR_SRConstants(&m_fgsr_sr_consts, 0, (uint32_t)m_viewport);
+    sprintf(buf, "s_slSetFGSR_SRConstants result: %d", (int)callRes);
+    // // MessageBoxA(NULL, buf, "Debug", MB_OK);
+}
+#endif
 
 void SLWrapper::SetDeepDVCOptions(const sl::DeepDVCOptions consts)
 {
@@ -1363,6 +1425,80 @@ void SLWrapper::EvaluateNIS(nvrhi::ICommandList* commandList) {
     commandList->clearState();
 
 }
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+void SLWrapper::TagResources_FGSR_SR(
+    nvrhi::ICommandList* commandList,
+    const donut::engine::IView* view,
+    nvrhi::ITexture* depth,
+    nvrhi::ITexture* motionVectors,
+    nvrhi::ITexture* input,
+    nvrhi::ITexture* output)
+{
+    if (!m_sl_initialised) {
+        log::warning("Streamline not initialised.");
+        return;
+    }
+
+    sl::Extent renderExtent{ 0, 0, input->getDesc().width, input->getDesc().height };
+    sl::Extent fullExtent{ 0, 0, output->getDesc().width, output->getDesc().height };
+    void* cmdbuffer = GetNativeCommandList(commandList);
+
+    sl::Resource depthResource{}, mvecResource{}, inputResource{}, outputResource{};
+    GetSLResource(commandList, depthResource, depth, view);
+    GetSLResource(commandList, mvecResource, motionVectors, view);
+    GetSLResource(commandList, inputResource, input, view);
+    GetSLResource(commandList, outputResource, output, view);
+
+    sl::ResourceTag depthResourceTag = sl::ResourceTag{ &depthResource, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
+    sl::ResourceTag mvecResourceTag = sl::ResourceTag{ &mvecResource, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
+    sl::ResourceTag inputResourceTag = sl::ResourceTag{ &inputResource, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
+    sl::ResourceTag outputResourceTag = sl::ResourceTag{ &outputResource, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
+
+    sl::ResourceTag inputs[] = { depthResourceTag, mvecResourceTag, inputResourceTag, outputResourceTag };
+    successCheck(SetTag(inputs, _countof(inputs), cmdbuffer), "slSetTag_FGSR_SR");
+}
+
+void SLWrapper::EvaluateFGSR_SR(nvrhi::ICommandList* commandList) {
+
+    void* nativeCommandList = nullptr;
+
+#if DONUT_WITH_DX11
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11)
+        nativeCommandList = m_Device->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext);
+#endif
+
+#if DONUT_WITH_DX12
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+#endif
+
+#if DONUT_WITH_VULKAN
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer);
+#endif
+
+    if (nativeCommandList == nullptr) {
+        log::warning("Failed to retrieve context for FGSR_SR evaluation.");
+        return;
+    }
+
+    sl::ViewportHandle view(m_viewport);
+    const sl::BaseStructure* inputs[] = { &view };  // 只传 viewport，constants 已经通过 SetFGSR_SROptions 设置
+
+    char buf[128];
+    sprintf(buf, "Evaluate: viewport=%u, frame=%u", (uint32_t)m_viewport, (uint32_t)*m_currentFrame);
+    // // MessageBoxA(NULL, buf, "Debug - Evaluate", MB_OK);
+
+    sl::Result evalRes = slEvaluateFeature(sl::kFeatureFGSR_SR, *m_currentFrame, inputs, _countof(inputs), nativeCommandList);
+    sprintf(buf, "slEvaluateFeature result: %d", (int)evalRes);
+    // MessageBoxA(NULL, buf, "Debug - Evaluate Result", MB_OK);
+
+    //Our pipeline is very simple so we can simply clear it, but normally state tracking should be implemented.
+    commandList->clearState();
+
+}
+#endif
 
 void SLWrapper::EvaluateDeepDVC(nvrhi::ICommandList* commandList) {
 

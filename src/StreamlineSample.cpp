@@ -78,6 +78,9 @@ StreamlineSample::StreamlineSample(
 #ifdef STREAMLINE_FEATURE_DLSS_RR
     m_ui.DLSSRR_Supported = NVWrapper::Get().GetDLSSRRAvailable();
 #endif // STREAMLINE_FEATURE_DLSS_RR
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    m_ui.FGSR_SR_Supported = NVWrapper::Get().GetFGSR_SRAvailable();
+#endif
 #if STREAMLINE_FEATURE_LATEWARP
     m_ui.Latewarp_Supported = NVWrapper::Get().GetLatewarpAvailable();
 #endif
@@ -194,6 +197,10 @@ StreamlineSample::StreamlineSample(
     }
     m_ui.DLSSRRPresetsReset();
 #endif // STREAMLINE_FEATURE_DLSS_RR
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // FGSR_SR will be controlled via UI
+#endif
 
     if (m_ScriptingConfig.DLSSG_on != -1 && NVWrapper::Get().GetDLSSGAvailable() && NVWrapper::Get().GetReflexAvailable()) {
         if (m_ui.REFLEX_Mode == 0) 
@@ -1021,7 +1028,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         sl::DLSSOptions dlssConstants = {};
         dlssConstants.mode = sl::DLSSMode::eOff;
         NVWrapper::Get().SetDLSSOptions(dlssConstants);
-        m_RenderingRectSize = m_DisplaySize;
+            m_RenderingRectSize = m_DisplaySize;
     }
 
 #ifdef STREAMLINE_FEATURE_DLSS_RR 
@@ -1424,6 +1431,53 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         NVWrapper::Get().EvaluateNIS(m_CommandList);
     }
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    //
+    // DO FGSR_SR
+    //
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
+
+        // FGSR_SR SETUP
+        auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+        fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+        fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
+        fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+
+        // Camera matrix
+        dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+        dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
+        dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
+        fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
+
+        // Thresholds - adjust these values as needed
+        fgsr_sr_consts.distance_diff_threshold = 0.05f;
+        fgsr_sr_consts.depth_diff_threshold = 0.01f;
+        fgsr_sr_consts.maxFlowWeight = 0.8f;
+
+        NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+        // Copy PreUIColor to FGSR_SROutput as input (like NIS does)
+        m_CommandList->copyTexture(m_RenderTargets->FGSR_SROutput, nvrhi::TextureSlice(),
+                                   m_RenderTargets->PreUIColor, nvrhi::TextureSlice());
+
+        // Prepare resources state
+        auto FGSROutputDesc = m_RenderTargets->FGSR_SROutput->getDesc();
+        auto PreUIColorDesc = m_RenderTargets->PreUIColor->getDesc();
+        m_CommandList->setTextureState(m_RenderTargets->FGSR_SROutput, nvrhi::AllSubresources, FGSROutputDesc.initialState);
+        m_CommandList->setTextureState(m_RenderTargets->PreUIColor, nvrhi::AllSubresources, PreUIColorDesc.initialState);
+        m_CommandList->commitBarriers();
+
+        // TAG STREAMLINE RESOURCES - input from FGSR_SROutput, output to PreUIColor
+        NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
+            m_View->GetChildView(ViewType::PLANAR, 0),
+            m_RenderTargets->Depth,
+            m_RenderTargets->MotionVectors,
+            m_RenderTargets->FGSR_SROutput,   // 输入（从这里读）
+            m_RenderTargets->PreUIColor);     // 输出（写到这里）
+
+        NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+    }
+#endif
 
     NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
 

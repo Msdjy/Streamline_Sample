@@ -168,6 +168,18 @@ public:
     void EvaluateNIS(nvrhi::ICommandList* commandList) override;
     void CleanupNIS(bool wfi) override;
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    void TagResources_FGSR_SR(
+        nvrhi::ICommandList* commandList,
+        const donut::engine::IView* view,
+        nvrhi::ITexture* depth,
+        nvrhi::ITexture* motionVectors,
+        nvrhi::ITexture* input,
+        nvrhi::ITexture* output) override;
+    void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) override;
+    void EvaluateFGSR_SR(nvrhi::ICommandList* commandList) override;
+#endif
+
     void SetDeepDVCOptions(const sl::DeepDVCOptions consts) override;
     void QueryDeepDVCState(uint64_t& estimatedVRamUsage) override;
     void EvaluateDeepDVC(nvrhi::ICommandList* commandList) override;

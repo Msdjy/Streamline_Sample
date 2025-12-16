@@ -196,6 +196,12 @@ public:
     sl::NISMode                         NIS_Mode = sl::NISMode::eOff;
     float                               NIS_Sharpness = 0.5f;
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // FGSR_SR specific parameters
+    bool                                FGSR_SR_Supported = false;
+    sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
+#endif
+
     // DeepDVC specific parameters
     bool                                DeepDVC_Supported = false;
     sl::DeepDVCMode                     DeepDVC_Mode = sl::DeepDVCMode::eOff;

@@ -56,6 +56,7 @@ public:
     nvrhi::TextureHandle AmbientOcclusion;
     nvrhi::TextureHandle NisColor;
     nvrhi::TextureHandle PreUIColor;
+    nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR (R11G11B10_FLOAT)
     nvrhi::TextureHandle SpecHitDistance;
     nvrhi::TextureHandle GBufferDiffuseRR;
     nvrhi::TextureHandle GBufferSpecularRR;
@@ -69,6 +70,7 @@ public:
     std::shared_ptr<donut::engine::FramebufferFactory> LdrFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> AAResolvedFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> PreUIFramebuffer;
+    std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SROutputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> SpecHitDistanceBuffer;
 
     donut::math::int2 m_RenderSize;// size of render targets pre-DLSS
@@ -176,7 +178,11 @@ public:
         desc.debugName = "PreUIColor";
         PreUIColor = device->createTexture(desc);
 
-
+        // FGSR_SR requires R11G11B10_FLOAT format for historyColor copy
+        desc.format = backbufferFormat;
+        desc.isUAV = true;
+        desc.debugName = "FGSR_SROutput";
+        FGSR_SROutput = device->createTexture(desc);
 
         if (desc.isVirtual)
         {
@@ -194,6 +200,7 @@ public:
                 GBufferEmissiveRR,
                 ColorspaceCorrectionColor,
                 PreUIColor,
+                FGSR_SROutput,
                 NisColor,
                 AmbientOcclusion,
                 GBufferSpecularRR,
@@ -244,6 +251,9 @@ public:
 
         PreUIFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         PreUIFramebuffer->RenderTargets = { PreUIColor };
+
+        FGSR_SROutputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
+        FGSR_SROutputFramebuffer->RenderTargets = { FGSR_SROutput };
     }
 
     bool IsUpdateRequired(donut::math::int2 renderSize, donut::math::int2 displaySize, donut::math::uint sampleCount = 1) const
@@ -260,6 +270,7 @@ public:
         commandList->clearTextureFloat(LdrColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(NisColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(PreUIColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
+        commandList->clearTextureFloat(FGSR_SROutput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(AAResolvedColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(SpecHitDistance, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(GBufferDiffuseRR, nvrhi::AllSubresources, nvrhi::Color(0.f));

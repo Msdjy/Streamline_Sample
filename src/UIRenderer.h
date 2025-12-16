@@ -462,8 +462,24 @@ protected:
             }
             if (! m_ui.NIS_Supported) popDisabled();
 
-            
+
             if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+            //
+            //  FGSR_SR
+            //
+
+            ImGui::Text("FGSR Super Resolution");
+            ImGui::SameLine();
+            if (! m_ui.FGSR_SR_Supported) pushDisabled();
+            int fgsr_sr_mode = m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOn ? 1 : 0;
+            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0On\0");
+            m_ui.FGSR_SR_Mode = fgsr_sr_mode == 1 ? sl::FGSR_SRMode::eOn : sl::FGSR_SRMode::eOff;
+            if (! m_ui.FGSR_SR_Supported) popDisabled();
+
+            if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;
+#endif
 
             if (m_dev_view_TopLevelDLSS == 0) popDisabled();
             ImGui::Unindent();

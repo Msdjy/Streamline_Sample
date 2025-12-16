@@ -58,6 +58,9 @@
 #ifdef STREAMLINE_FEATURE_DLSS_RR
 #include <sl_dlss_d.h>
 #endif
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+#include <sl_fgsr_sr.h>
+#endif
 #if STREAMLINE_FEATURE_LATEWARP
 #include <sl_latewarp.h>
 #endif
@@ -432,6 +435,11 @@ protected:
     bool m_nis_available = false;
     sl::NISOptions m_nis_consts{};
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    bool m_fgsr_sr_available = false;
+    sl::FGSR_SRConstants m_fgsr_sr_consts{};
+#endif
+
     bool m_deepdvc_available = false;
     sl::DeepDVCOptions m_deepdvc_consts{};
 
@@ -568,6 +576,20 @@ public:
     bool GetNISLastEnable() { return m_nis_consts.mode != sl::NISMode::eOff; }
     virtual void EvaluateNIS(nvrhi::ICommandList *commandList) = 0;
     virtual void CleanupNIS(bool wfi) = 0;
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    virtual void TagResources_FGSR_SR(
+        nvrhi::ICommandList *commandList,
+        const donut::engine::IView *view,
+        nvrhi::ITexture *depth,
+        nvrhi::ITexture *motionVectors,
+        nvrhi::ITexture *input,
+        nvrhi::ITexture *output) = 0;
+    virtual void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) = 0;
+    bool GetFGSR_SRAvailable() { return m_fgsr_sr_available; }
+    bool GetFGSR_SRLastEnable() { return m_fgsr_sr_consts.mode != sl::FGSR_SRMode::eOff; }
+    virtual void EvaluateFGSR_SR(nvrhi::ICommandList *commandList) = 0;
+#endif
 
     virtual void SetDeepDVCOptions(const sl::DeepDVCOptions consts) = 0;
     bool GetDeepDVCAvailable() { return m_deepdvc_available; }
