@@ -948,7 +948,13 @@ sl::Resource SLWrapper::allocateResourceCallback(const sl::ResourceAllocationDes
                 memset(clearValue.Color, 0, sizeof(clearValue.Color));
                 pClearValue = &clearValue;
             }
-            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));
+            // 共享资源需要 D3D12_HEAP_FLAG_SHARED
+            D3D12_HEAP_FLAGS heapFlags = D3D12_HEAP_FLAG_NONE;
+            if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS)
+            {
+                heapFlags |= D3D12_HEAP_FLAG_SHARED;
+            }
+            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, heapFlags, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));
             if (!success) log::error("Failed to create texture in SL allocation callback");
             res.type = resDesc->type;
             res.native = ptexture;
