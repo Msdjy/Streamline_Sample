@@ -473,9 +473,9 @@ protected:
             ImGui::Text("FGSR Super Resolution");
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
-            int fgsr_sr_mode = m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOn ? 1 : 0;
-            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0On\0");
-            m_ui.FGSR_SR_Mode = fgsr_sr_mode == 1 ? sl::FGSR_SRMode::eOn : sl::FGSR_SRMode::eOff;
+            int fgsr_sr_mode = static_cast<int>(m_ui.FGSR_SR_Mode);
+            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0");
+            m_ui.FGSR_SR_Mode = static_cast<sl::FGSR_SRMode>(fgsr_sr_mode);
             if (! m_ui.FGSR_SR_Supported) popDisabled();
 
             if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;
