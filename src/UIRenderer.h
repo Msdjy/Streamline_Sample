@@ -474,7 +474,7 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
             int fgsr_sr_mode = static_cast<int>(m_ui.FGSR_SR_Mode);
-            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0");
+            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0");
             m_ui.FGSR_SR_Mode = static_cast<sl::FGSR_SRMode>(fgsr_sr_mode);
             if (! m_ui.FGSR_SR_Supported) popDisabled();
 
