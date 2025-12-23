@@ -131,6 +131,17 @@ void logToFile(donut::log::Severity s, char const* txt) {
 
 bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCreationParameters& deviceParams, std::string& sceneName, bool& checkSig, bool& enableSLlog, bool& useNewSLSetTagAPI, bool& allowSMSCG)
 {
+    // 默认开启日志文件输出到固定路径
+    const char* logPath = "E:\\workspace\\dlss\\sample_log.log";
+    log_file = std::ofstream(logPath);
+    if (log_file.is_open()) {
+        printf("Log file created: %s\n", logPath);
+    } else {
+        printf("Failed to create log file: %s\n", logPath);
+    }
+    donut::log::SetCallback(&logToFile);
+    donut::log::SetMinSeverity(donut::log::Severity::Info);
+
     for (int i = 1; i < argc; i++)
     {
         if (!_stricmp(argv[i], "-width"))
