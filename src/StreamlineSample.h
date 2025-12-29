@@ -248,6 +248,11 @@ private:
     sl::DLSSMode                                    DLSSRR_Last_Mode = sl::DLSSMode::eOff;
     donut::math::int2                               m_DLSSRR_Last_DisplaySize = { 0,0 };
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    sl::FGSR_SRMode                                 m_FGSR_SR_Last_Mode = sl::FGSR_SRMode::eOff;
+    int                                             m_FGSR_SR_Last_ScaleFactor = 1;
+#endif
+
 public:
     StreamlineSample(DeviceManager* deviceManager, sl::ViewportHandle vpHandle, UIData& ui, const std::string& sceneName, ScriptingConfig scriptingConfig);
     ~StreamlineSample();

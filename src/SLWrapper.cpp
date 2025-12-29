@@ -1504,6 +1504,26 @@ void SLWrapper::EvaluateFGSR_SR(nvrhi::ICommandList* commandList) {
     commandList->clearState();
 
 }
+
+void SLWrapper::CleanupFGSR_SR(bool wfi) {
+    if (!m_sl_initialised) {
+        log::warning("SL not initialised.");
+        return;
+    }
+
+    if (!m_fgsr_sr_available) {
+        log::warning("FGSR_SR not available.");
+        return;
+    }
+
+    if (wfi) {
+        m_Device->waitForIdle();
+    }
+
+    sl::Result result = slFreeResources(sl::kFeatureFGSR_SR, m_viewport);
+    // add an exception for eErrorMissingOrInvalidAPI for FGSR_SR plugin that doesn't export slFreeResources
+    successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_FGSR_SR");
+}
 #endif
 
 void SLWrapper::EvaluateDeepDVC(nvrhi::ICommandList* commandList) {

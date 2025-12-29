@@ -236,8 +236,10 @@ StreamlineSample::~StreamlineSample()
     NVWrapper::Get().CleanupDLSSRR(true);
 #endif // STREAMLINE_FEATURE_DLSS_RR
     NVWrapper::Get().CleanupDLSSG(false);
-
-    #if STREAMLINE_FEATURE_LATEWARP
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    NVWrapper::Get().CleanupFGSR_SR(true);
+#endif
+#if STREAMLINE_FEATURE_LATEWARP
     NVWrapper::Get().CleanupLatewarp(true);
 #endif
 }
@@ -928,6 +930,18 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
     m_ui.DLSS_Last_AA = m_ui.AAMode;
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // Reset FGSR_SR vars if we stop using it or change scale factor
+    if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
+        (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || m_ui.FGSR_SR_ScaleFactor != m_FGSR_SR_Last_ScaleFactor))
+    {
+        // Cleanup FGSR resources when turning off or changing scale factor
+        NVWrapper::Get().CleanupFGSR_SR(true);
+    }
+    m_FGSR_SR_Last_Mode = m_ui.FGSR_SR_Mode;
+    m_FGSR_SR_Last_ScaleFactor = m_ui.FGSR_SR_ScaleFactor;
+#endif
+
     // If we are using DLSS set its constants
     if ((m_ui.AAMode == AntiAliasingMode::DLSS && m_ui.DLSS_Mode != sl::DLSSMode::eOff))
     {
@@ -1054,6 +1068,14 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // If FGSR_SR is enabled with upscaling, set render size accordingly
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_ScaleFactor > 1)
+    {
+        m_RenderingRectSize = { m_DisplaySize.x / m_ui.FGSR_SR_ScaleFactor,
+                                m_DisplaySize.y / m_ui.FGSR_SR_ScaleFactor };
+    }
+#endif // STREAMLINE_FEATURE_FGSR_SR
 
     // PASS SETUP
     {
@@ -1359,9 +1381,54 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
     else
     {
-        // IF YOU DO NOTHING SPECIAL -> FORWARD TEXTURE
-        m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
-        m_PreviousViewsValid = false;
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+        // DO FGSR_SR (HdrColor -> AAResolvedColor)
+        if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
+
+            // FGSR_SR SETUP
+            auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+            fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+            fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
+            fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+
+            // Camera matrix
+            dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+            dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
+            dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
+            fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
+
+            // Thresholds
+            fgsr_sr_consts.distance_diff_threshold = 0.05f;
+            fgsr_sr_consts.depth_diff_threshold = 0.01f;
+            fgsr_sr_consts.maxFlowWeight = 0.8f;
+
+            NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+            // Prepare resources state
+            auto HdrColorDesc = m_RenderTargets->HdrColor->getDesc();
+            auto AAResolvedDesc = m_RenderTargets->AAResolvedColor->getDesc();
+            m_CommandList->setTextureState(m_RenderTargets->HdrColor, nvrhi::AllSubresources, HdrColorDesc.initialState);
+            m_CommandList->setTextureState(m_RenderTargets->AAResolvedColor, nvrhi::AllSubresources, AAResolvedDesc.initialState);
+            m_CommandList->commitBarriers();
+
+            // TAG STREAMLINE RESOURCES - input HdrColor (renderSize), output AAResolvedColor (displaySize)
+            NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
+                m_View->GetChildView(ViewType::PLANAR, 0),
+                m_RenderTargets->Depth,
+                m_RenderTargets->MotionVectors,
+                m_RenderTargets->HdrColor,           // 输入 (renderSize, e.g. 540p)
+                m_RenderTargets->AAResolvedColor);   // 输出 (displaySize, e.g. 1080p)
+
+            NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+            m_PreviousViewsValid = true;
+        }
+        else
+#endif // STREAMLINE_FEATURE_FGSR_SR
+        {
+            // IF YOU DO NOTHING SPECIAL -> FORWARD TEXTURE
+            m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
+            m_PreviousViewsValid = false;
+        }
     }
 
 #ifdef STREAMLINE_FEATURE_DLSS_RR
@@ -1430,54 +1497,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
         NVWrapper::Get().EvaluateNIS(m_CommandList);
     }
-
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-    //
-    // DO FGSR_SR
-    //
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
-
-        // FGSR_SR SETUP
-        auto fgsr_sr_consts = sl::FGSR_SRConstants{};
-        fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
-        fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
-        fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
-
-        // Camera matrix
-        dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
-        dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
-        dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
-        fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
-
-        // Thresholds - adjust these values as needed
-        fgsr_sr_consts.distance_diff_threshold = 0.05f;
-        fgsr_sr_consts.depth_diff_threshold = 0.01f;
-        fgsr_sr_consts.maxFlowWeight = 0.8f;
-
-        NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
-
-        // Copy PreUIColor to FGSR_SROutput as input (like NIS does)
-        m_CommandList->copyTexture(m_RenderTargets->FGSR_SROutput, nvrhi::TextureSlice(),
-                                   m_RenderTargets->PreUIColor, nvrhi::TextureSlice());
-
-        // Prepare resources state
-        auto FGSROutputDesc = m_RenderTargets->FGSR_SROutput->getDesc();
-        auto PreUIColorDesc = m_RenderTargets->PreUIColor->getDesc();
-        m_CommandList->setTextureState(m_RenderTargets->FGSR_SROutput, nvrhi::AllSubresources, FGSROutputDesc.initialState);
-        m_CommandList->setTextureState(m_RenderTargets->PreUIColor, nvrhi::AllSubresources, PreUIColorDesc.initialState);
-        m_CommandList->commitBarriers();
-
-        // TAG STREAMLINE RESOURCES - input from FGSR_SROutput, output to PreUIColor
-        NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
-            m_View->GetChildView(ViewType::PLANAR, 0),
-            m_RenderTargets->Depth,
-            m_RenderTargets->MotionVectors,
-            m_RenderTargets->FGSR_SROutput,   // 输入（从这里读）
-            m_RenderTargets->PreUIColor);     // 输出（写到这里）
-
-        NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
-    }
-#endif
 
     NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
 

@@ -589,6 +589,7 @@ public:
     bool GetFGSR_SRAvailable() { return m_fgsr_sr_available; }
     bool GetFGSR_SRLastEnable() { return m_fgsr_sr_consts.mode != sl::FGSR_SRMode::eOff; }
     virtual void EvaluateFGSR_SR(nvrhi::ICommandList *commandList) = 0;
+    virtual void CleanupFGSR_SR(bool wfi) = 0;
 #endif
 
     virtual void SetDeepDVCOptions(const sl::DeepDVCOptions consts) = 0;

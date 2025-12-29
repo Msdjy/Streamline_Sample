@@ -178,6 +178,7 @@ public:
         nvrhi::ITexture* output) override;
     void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) override;
     void EvaluateFGSR_SR(nvrhi::ICommandList* commandList) override;
+    void CleanupFGSR_SR(bool wfi) override;
 #endif
 
     void SetDeepDVCOptions(const sl::DeepDVCOptions consts) override;
