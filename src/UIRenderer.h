@@ -474,11 +474,12 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
             int fgsr_sr_mode = static_cast<int>(m_ui.FGSR_SR_Mode);
-            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0");
+            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0QuickSR+CUDA\0QuickSR+CS\0");
             m_ui.FGSR_SR_Mode = static_cast<sl::FGSR_SRMode>(fgsr_sr_mode);
 
-            // Scale factor selection (1x or 2x)
-            if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
+            // Scale factor selection (1x or 2x) - only for Shader mode
+            // TRT modes are fixed at 2x upscaling
+            if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
             {
                 ImGui::Text("Scale Factor");
                 ImGui::SameLine();

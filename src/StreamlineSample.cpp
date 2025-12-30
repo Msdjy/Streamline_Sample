@@ -931,15 +931,21 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     m_ui.DLSS_Last_AA = m_ui.AAMode;
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // Reset FGSR_SR vars if we stop using it or change scale factor
-    if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
-        (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || m_ui.FGSR_SR_ScaleFactor != m_FGSR_SR_Last_ScaleFactor))
+    // Reset FGSR_SR vars if we stop using it or change effective scale factor
+    // Shader mode uses user-selected scale, TRT modes always use 2x
     {
-        // Cleanup FGSR resources when turning off or changing scale factor
-        NVWrapper::Get().CleanupFGSR_SR(true);
+        int effectiveScale = (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
+                             ? m_ui.FGSR_SR_ScaleFactor
+                             : (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff ? 2 : 1);
+        if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
+            (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || effectiveScale != m_FGSR_SR_Last_ScaleFactor))
+        {
+            // Cleanup FGSR resources when turning off or changing scale factor
+            NVWrapper::Get().CleanupFGSR_SR(true);
+        }
+        m_FGSR_SR_Last_Mode = m_ui.FGSR_SR_Mode;
+        m_FGSR_SR_Last_ScaleFactor = effectiveScale;
     }
-    m_FGSR_SR_Last_Mode = m_ui.FGSR_SR_Mode;
-    m_FGSR_SR_Last_ScaleFactor = m_ui.FGSR_SR_ScaleFactor;
 #endif
 
     // If we are using DLSS set its constants
@@ -1069,11 +1075,19 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // If FGSR_SR is enabled with upscaling, set render size accordingly
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_ScaleFactor > 1)
+    // If FGSR_SR is enabled, set render size accordingly
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
     {
-        m_RenderingRectSize = { m_DisplaySize.x / m_ui.FGSR_SR_ScaleFactor,
-                                m_DisplaySize.y / m_ui.FGSR_SR_ScaleFactor };
+        // Shader mode: use user-selected scale factor (1x or 2x)
+        // TRT modes: always use 2x upscaling
+        int scaleFactor = (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
+                          ? m_ui.FGSR_SR_ScaleFactor
+                          : 2;
+        if (scaleFactor > 1)
+        {
+            m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
+                                    m_DisplaySize.y / scaleFactor };
+        }
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
 
