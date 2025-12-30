@@ -56,7 +56,8 @@ public:
     nvrhi::TextureHandle AmbientOcclusion;
     nvrhi::TextureHandle NisColor;
     nvrhi::TextureHandle PreUIColor;
-    nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR (R11G11B10_FLOAT)
+    nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR
+    nvrhi::TextureHandle FGSR_SRInput;   // renderSize 8-bit LDR input for FGSR_SR
     nvrhi::TextureHandle SpecHitDistance;
     nvrhi::TextureHandle GBufferDiffuseRR;
     nvrhi::TextureHandle GBufferSpecularRR;
@@ -71,6 +72,7 @@ public:
     std::shared_ptr<donut::engine::FramebufferFactory> AAResolvedFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> PreUIFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SROutputFramebuffer;
+    std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SRInputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> SpecHitDistanceBuffer;
 
     donut::math::int2 m_RenderSize;// size of render targets pre-DLSS
@@ -124,6 +126,13 @@ public:
         desc.initialState = nvrhi::ResourceStates::RenderTarget;
         desc.debugName = "AmbientOcclusion";
         AmbientOcclusion = device->createTexture(desc);
+
+        // FGSR_SRInput: renderSize, same format as backbuffer for super-resolution input
+        desc.format = backbufferFormat;
+        desc.isUAV = true;
+        desc.initialState = nvrhi::ResourceStates::RenderTarget;
+        desc.debugName = "FGSR_SRInput";
+        FGSR_SRInput = device->createTexture(desc);
 
         desc.format = nvrhi::Format::RGBA16_FLOAT;
         desc.width = displaySize.x;
@@ -201,6 +210,7 @@ public:
                 ColorspaceCorrectionColor,
                 PreUIColor,
                 FGSR_SROutput,
+                FGSR_SRInput,
                 NisColor,
                 AmbientOcclusion,
                 GBufferSpecularRR,
@@ -254,6 +264,9 @@ public:
 
         FGSR_SROutputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         FGSR_SROutputFramebuffer->RenderTargets = { FGSR_SROutput };
+
+        FGSR_SRInputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
+        FGSR_SRInputFramebuffer->RenderTargets = { FGSR_SRInput };
     }
 
     bool IsUpdateRequired(donut::math::int2 renderSize, donut::math::int2 displaySize, donut::math::uint sampleCount = 1) const
@@ -271,6 +284,7 @@ public:
         commandList->clearTextureFloat(NisColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(PreUIColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(FGSR_SROutput, nvrhi::AllSubresources, nvrhi::Color(0.f));
+        commandList->clearTextureFloat(FGSR_SRInput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(AAResolvedColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(SpecHitDistance, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(GBufferDiffuseRR, nvrhi::AllSubresources, nvrhi::Color(0.f));

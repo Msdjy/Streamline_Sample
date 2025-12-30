@@ -1395,49 +1395,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
     else
     {
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-        // DO FGSR_SR (HdrColor -> AAResolvedColor)
-        if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
-
-            // FGSR_SR SETUP
-            auto fgsr_sr_consts = sl::FGSR_SRConstants{};
-            fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
-            fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
-            fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
-
-            // Camera matrix
-            dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
-            dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
-            dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
-            fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
-
-            // Thresholds
-            fgsr_sr_consts.distance_diff_threshold = 0.05f;
-            fgsr_sr_consts.depth_diff_threshold = 0.01f;
-            fgsr_sr_consts.maxFlowWeight = 0.8f;
-
-            NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
-
-            // Prepare resources state
-            auto HdrColorDesc = m_RenderTargets->HdrColor->getDesc();
-            auto AAResolvedDesc = m_RenderTargets->AAResolvedColor->getDesc();
-            m_CommandList->setTextureState(m_RenderTargets->HdrColor, nvrhi::AllSubresources, HdrColorDesc.initialState);
-            m_CommandList->setTextureState(m_RenderTargets->AAResolvedColor, nvrhi::AllSubresources, AAResolvedDesc.initialState);
-            m_CommandList->commitBarriers();
-
-            // TAG STREAMLINE RESOURCES - input HdrColor (renderSize), output AAResolvedColor (displaySize)
-            NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
-                m_View->GetChildView(ViewType::PLANAR, 0),
-                m_RenderTargets->Depth,
-                m_RenderTargets->MotionVectors,
-                m_RenderTargets->HdrColor,           // 输入 (renderSize, e.g. 540p)
-                m_RenderTargets->AAResolvedColor);   // 输出 (displaySize, e.g. 1080p)
-
-            NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
-            m_PreviousViewsValid = true;
-        }
-        else
-#endif // STREAMLINE_FEATURE_FGSR_SR
+        // FGSR will be done after tonemap
         {
             // IF YOU DO NOTHING SPECIAL -> FORWARD TEXTURE
             m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
@@ -1511,6 +1469,57 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
         NVWrapper::Get().EvaluateNIS(m_CommandList);
     }
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    //
+    // DO FGSR_SR (super-resolution: renderSize → displaySize)
+    //
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
+
+        // Blit PreUIColor (displaySize, LDR) → FGSR_SRInput (renderSize, LDR)
+        engine::BlitParameters blitParams{};
+        blitParams.targetFramebuffer = m_RenderTargets->FGSR_SRInputFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
+        blitParams.sourceTexture = m_RenderTargets->PreUIColor;
+        m_CommonPasses->BlitTexture(m_CommandList, blitParams, &m_BindingCache);
+
+        // FGSR_SR SETUP
+        auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+        fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+        fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
+        fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+
+        // Camera matrix
+        dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+        dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
+        dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
+        fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
+
+        // Thresholds
+        fgsr_sr_consts.distance_diff_threshold = 0.05f;
+        fgsr_sr_consts.depth_diff_threshold = 0.01f;
+        fgsr_sr_consts.maxFlowWeight = 0.8f;
+
+        NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+        // Prepare resources state
+        auto FGSRInputDesc = m_RenderTargets->FGSR_SRInput->getDesc();
+        auto PreUIColorDesc = m_RenderTargets->PreUIColor->getDesc();
+        m_CommandList->setTextureState(m_RenderTargets->FGSR_SRInput, nvrhi::AllSubresources, FGSRInputDesc.initialState);
+        m_CommandList->setTextureState(m_RenderTargets->PreUIColor, nvrhi::AllSubresources, PreUIColorDesc.initialState);
+        m_CommandList->commitBarriers();
+
+        // TAG STREAMLINE RESOURCES - input FGSR_SRInput (renderSize, 8-bit LDR), output PreUIColor (displaySize)
+        NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
+            m_View->GetChildView(ViewType::PLANAR, 0),
+            m_RenderTargets->Depth,
+            m_RenderTargets->MotionVectors,
+            m_RenderTargets->FGSR_SRInput,    // 输入 (renderSize, 8-bit LDR)
+            m_RenderTargets->PreUIColor);     // 输出 (displaySize)
+
+        NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+        m_PreviousViewsValid = true;
+    }
+#endif // STREAMLINE_FEATURE_FGSR_SR
 
     NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
 
