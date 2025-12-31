@@ -1436,8 +1436,6 @@ void SLWrapper::EvaluateNIS(nvrhi::ICommandList* commandList) {
 void SLWrapper::TagResources_FGSR_SR(
     nvrhi::ICommandList* commandList,
     const donut::engine::IView* view,
-    nvrhi::ITexture* depth,
-    nvrhi::ITexture* motionVectors,
     nvrhi::ITexture* input,
     nvrhi::ITexture* output)
 {
@@ -1450,18 +1448,15 @@ void SLWrapper::TagResources_FGSR_SR(
     sl::Extent fullExtent{ 0, 0, output->getDesc().width, output->getDesc().height };
     void* cmdbuffer = GetNativeCommandList(commandList);
 
-    sl::Resource depthResource{}, mvecResource{}, inputResource{}, outputResource{};
-    GetSLResource(commandList, depthResource, depth, view);
-    GetSLResource(commandList, mvecResource, motionVectors, view);
+    // depth 和 motionVectors 已经在 TagResources_General 中标记，这里只标记 input/output
+    sl::Resource inputResource{}, outputResource{};
     GetSLResource(commandList, inputResource, input, view);
     GetSLResource(commandList, outputResource, output, view);
 
-    sl::ResourceTag depthResourceTag = sl::ResourceTag{ &depthResource, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
-    sl::ResourceTag mvecResourceTag = sl::ResourceTag{ &mvecResource, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
     sl::ResourceTag inputResourceTag = sl::ResourceTag{ &inputResource, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
     sl::ResourceTag outputResourceTag = sl::ResourceTag{ &outputResource, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
 
-    sl::ResourceTag inputs[] = { depthResourceTag, mvecResourceTag, inputResourceTag, outputResourceTag };
+    sl::ResourceTag inputs[] = { inputResourceTag, outputResourceTag };
     successCheck(SetTag(inputs, _countof(inputs), cmdbuffer), "slSetTag_FGSR_SR");
 }
 

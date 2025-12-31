@@ -581,8 +581,6 @@ public:
     virtual void TagResources_FGSR_SR(
         nvrhi::ICommandList *commandList,
         const donut::engine::IView *view,
-        nvrhi::ITexture *depth,
-        nvrhi::ITexture *motionVectors,
         nvrhi::ITexture *input,
         nvrhi::ITexture *output) = 0;
     virtual void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) = 0;

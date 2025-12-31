@@ -1495,9 +1495,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
 
         // Thresholds
-        fgsr_sr_consts.distance_diff_threshold = 0.05f;
-        fgsr_sr_consts.depth_diff_threshold = 0.01f;
-        fgsr_sr_consts.maxFlowWeight = 0.8f;
+        fgsr_sr_consts.distance_diff_threshold = 100.f;
+        fgsr_sr_consts.depth_diff_threshold = 0.003f;
+        fgsr_sr_consts.maxFlowWeight = 0.01f;
 
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
@@ -1509,10 +1509,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         m_CommandList->commitBarriers();
 
         // TAG STREAMLINE RESOURCES - input FGSR_SRInput (renderSize, 8-bit LDR), output PreUIColor (displaySize)
+        // depth 和 motionVectors 已经在 TagResources_General 中标记
         NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
             m_View->GetChildView(ViewType::PLANAR, 0),
-            m_RenderTargets->Depth,
-            m_RenderTargets->MotionVectors,
             m_RenderTargets->FGSR_SRInput,    // 输入 (renderSize, 8-bit LDR)
             m_RenderTargets->PreUIColor);     // 输出 (displaySize)
 

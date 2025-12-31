@@ -172,8 +172,6 @@ public:
     void TagResources_FGSR_SR(
         nvrhi::ICommandList* commandList,
         const donut::engine::IView* view,
-        nvrhi::ITexture* depth,
-        nvrhi::ITexture* motionVectors,
         nvrhi::ITexture* input,
         nvrhi::ITexture* output) override;
     void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) override;
