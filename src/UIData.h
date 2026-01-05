@@ -202,6 +202,7 @@ public:
     sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
     int                                 FGSR_SR_ScaleFactor = 2;  // 1 = 1x (no scaling), 2 = 2x upscaling
     bool                                FGSR_SR_UseBlend = true;  // true=混合模式, false=每帧上采样
+    bool                                FGSR_SR_UseJitter = true; // true=使用jitter, false=不使用jitter
 #endif
 
     // DeepDVC specific parameters

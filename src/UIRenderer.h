@@ -134,13 +134,14 @@ protected:
             return;
         }
 
-        if (m_ui.MouseOverUI) {
-            ImGui::SetNextWindowBgAlpha(0.5f);
-            ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
-            ImGui::SetNextWindowSize(ImVec2(float(width), float(height)));
-            ImGui::Begin("BackDrop", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus);
-            ImGui::End();
-        }
+        // 关闭鼠标悬停UI时的变暗背景滤镜
+        // if (m_ui.MouseOverUI) {
+        //     ImGui::SetNextWindowBgAlpha(0.5f);
+        //     ImGui::SetNextWindowPos(ImVec2(0.f, 0.f));
+        //     ImGui::SetNextWindowSize(ImVec2(float(width), float(height)));
+        //     ImGui::Begin("BackDrop", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus);
+        //     ImGui::End();
+        // }
 
 
         ImGui::SetNextWindowPos(ImVec2(width * 0.02f, height * 0.5f), 0, ImVec2(0.f, 0.5f));
@@ -474,19 +475,20 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
             int fgsr_sr_mode = static_cast<int>(m_ui.FGSR_SR_Mode);
-            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0QuickSR+CUDA\0QuickSR+CS\0");
+            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0QuickSR+CUDA\0QuickSR+CS\0SR4x+CUDA\0SR4x+CS\0");
             m_ui.FGSR_SR_Mode = static_cast<sl::FGSR_SRMode>(fgsr_sr_mode);
 
-            // Scale factor selection (1x or 2x) - only for Shader mode
-            // TRT modes are fixed at 2x upscaling
+            // Scale factor selection (1x, 2x or 4x) - only for Shader mode
+            // TRT modes are fixed at 2x upscaling, SR4x modes are fixed at 4x
             if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
             {
                 ImGui::Text("Scale Factor");
                 ImGui::SameLine();
-                int scaleIndex = m_ui.FGSR_SR_ScaleFactor - 1;  // 0 = 1x, 1 = 2x
-                if (ImGui::Combo("##FGSR_SRScale", &scaleIndex, "1x (No upscaling)\0002x Upscaling\0"))
+                // scaleIndex: 0=1x, 1=2x, 2=4x
+                int scaleIndex = (m_ui.FGSR_SR_ScaleFactor == 4) ? 2 : (m_ui.FGSR_SR_ScaleFactor - 1);
+                if (ImGui::Combo("##FGSR_SRScale", &scaleIndex, "1x (No upscaling)\0002x Upscaling\0004x Upscaling\0"))
                 {
-                    m_ui.FGSR_SR_ScaleFactor = scaleIndex + 1;
+                    m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex + 1);
                 }
             }
 
@@ -497,6 +499,12 @@ protected:
                 if (ImGui::IsItemHovered())
                 {
                     ImGui::SetTooltip("ON: First frame upsample + subsequent frames blend\nOFF: Upsample every frame (no blend)");
+                }
+
+                ImGui::Checkbox("Use Jitter", &m_ui.FGSR_SR_UseJitter);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("ON: Use TAA jitter for temporal accumulation\nOFF: No jitter (same subpixel every frame)");
                 }
             }
             if (! m_ui.FGSR_SR_Supported) popDisabled();
@@ -1095,19 +1103,20 @@ protected:
         ImGui::End();
 
 
-        if (m_ui.MouseOverUI) {
-            ImGui::SetNextWindowPos(ImVec2(width * 0.5f, height * 0.5f), 0, ImVec2(0.5f, 0.5f));
-            ImGui::Begin("SettingText", 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-            ImGui::Text("Settings Menu");
-            auto text = "sl::DLSSGMode::eOff is set.";
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize(text).x / 2);
-            ImGui::Text(text);
-            text = "Streamline features may behave differently while your mouse is hovering the UI.";
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize(text).x / 2);
-            ImGui::Text(text);
-
-            ImGui::End();
-        }
+        // 关闭鼠标悬停UI时的设置提示文字
+        // if (m_ui.MouseOverUI) {
+        //     ImGui::SetNextWindowPos(ImVec2(width * 0.5f, height * 0.5f), 0, ImVec2(0.5f, 0.5f));
+        //     ImGui::Begin("SettingText", 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
+        //     ImGui::Text("Settings Menu");
+        //     auto text = "sl::DLSSGMode::eOff is set.";
+        //     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize(text).x / 2);
+        //     ImGui::Text(text);
+        //     text = "Streamline features may behave differently while your mouse is hovering the UI.";
+        //     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize(text).x / 2);
+        //     ImGui::Text(text);
+        //
+        //     ImGui::End();
+        // }
 
     }
 };

@@ -495,7 +495,16 @@ bool StreamlineSample::SetupView()
 
     if (m_TemporalAntiAliasingPass) m_TemporalAntiAliasingPass->SetJitter(m_ui.TemporalAntiAliasingJitter);
 
-    float2 pixelOffset = m_ui.AAMode != AntiAliasingMode::NONE && m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
+    // 判断是否需要 jitter
+    bool needJitter = (m_ui.AAMode != AntiAliasingMode::NONE);
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // FGSR 模式下，根据 UseJitter 开关决定
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseJitter)
+    {
+        needJitter = true;
+    }
+#endif
+    float2 pixelOffset = needJitter && m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
 
     std::shared_ptr<PlanarView> planarView = std::dynamic_pointer_cast<PlanarView, IView>(m_View);
 
@@ -932,11 +941,17 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     // Reset FGSR_SR vars if we stop using it or change effective scale factor
-    // Shader mode uses user-selected scale, TRT modes always use 2x
+    // Shader mode uses user-selected scale, TRT modes use 2x, SR4x modes use 4x
     {
-        int effectiveScale = (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
-                             ? m_ui.FGSR_SR_ScaleFactor
-                             : (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff ? 2 : 1);
+        int effectiveScale = 1;
+        if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
+            effectiveScale = m_ui.FGSR_SR_ScaleFactor;
+        else if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CUDA ||
+                 m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CS)
+            effectiveScale = 4;
+        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
+            effectiveScale = 2;
+
         if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
             (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || effectiveScale != m_FGSR_SR_Last_ScaleFactor))
         {
@@ -1080,9 +1095,22 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     {
         // Shader mode: use user-selected scale factor (1x or 2x)
         // TRT modes: always use 2x upscaling
-        int scaleFactor = (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
-                          ? m_ui.FGSR_SR_ScaleFactor
-                          : 2;
+        // SR4x modes: always use 4x upscaling
+        int scaleFactor = 1;
+        if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
+        {
+            scaleFactor = m_ui.FGSR_SR_ScaleFactor;
+        }
+        else if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CUDA ||
+                 m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CS)
+        {
+            scaleFactor = 4;  // 4x超分模型
+        }
+        else
+        {
+            scaleFactor = 2;  // 其他TRT模式使用2x
+        }
+
         if (scaleFactor > 1)
         {
             m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
