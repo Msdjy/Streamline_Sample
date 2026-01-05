@@ -169,9 +169,9 @@ protected:
             popDisabled();
         }
 
-        // Resolution 
-        std::vector<std::string> Resolutions_strings = { "1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160" };
-        std::vector<int2> Resolutions_values = { {1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160} };
+        // Resolution
+        std::vector<std::string> Resolutions_strings = { "960 x 540", "1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160" };
+        std::vector<int2> Resolutions_values = { {960, 540}, {1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160} };
         int resIndex = -1;
         for (auto i = 0; i < Resolutions_values.size(); ++i) {
             if (Resolutions_values[i].x == m_ui.Resolution.x && Resolutions_values[i].y == m_ui.Resolution.y) {
@@ -487,6 +487,16 @@ protected:
                 if (ImGui::Combo("##FGSR_SRScale", &scaleIndex, "1x (No upscaling)\0002x Upscaling\0"))
                 {
                     m_ui.FGSR_SR_ScaleFactor = scaleIndex + 1;
+                }
+            }
+
+            // Blend mode toggle - only for non-Off modes
+            if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
+            {
+                ImGui::Checkbox("Use Blend", &m_ui.FGSR_SR_UseBlend);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("ON: First frame upsample + subsequent frames blend\nOFF: Upsample every frame (no blend)");
                 }
             }
             if (! m_ui.FGSR_SR_Supported) popDisabled();

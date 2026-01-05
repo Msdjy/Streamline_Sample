@@ -1499,6 +1499,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.depth_diff_threshold = 0.003f;
         fgsr_sr_consts.maxFlowWeight = 0.01f;
 
+        // Blend mode
+        fgsr_sr_consts.useBlend = m_ui.FGSR_SR_UseBlend;
+
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
         // Prepare resources state
