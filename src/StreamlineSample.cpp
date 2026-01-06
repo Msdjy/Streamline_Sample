@@ -1530,6 +1530,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         // Blend mode
         fgsr_sr_consts.useBlend = m_ui.FGSR_SR_UseBlend;
 
+        // Jitter resample for TAA temporal accumulation
+        fgsr_sr_consts.useJitterResample = m_ui.FGSR_SR_UseJitterResample;
+
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
         // Prepare resources state

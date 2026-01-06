@@ -506,6 +506,12 @@ protected:
                 {
                     ImGui::SetTooltip("ON: Use TAA jitter for temporal accumulation\nOFF: No jitter (same subpixel every frame)");
                 }
+
+                ImGui::Checkbox("Jitter Resample", &m_ui.FGSR_SR_UseJitterResample);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("ON: Apply jitter-based resampling after TRT super-resolution\nOFF: No jitter resample");
+                }
             }
             if (! m_ui.FGSR_SR_Supported) popDisabled();
 
