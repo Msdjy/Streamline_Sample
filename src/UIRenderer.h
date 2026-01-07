@@ -474,45 +474,89 @@ protected:
             ImGui::Text("FGSR Super Resolution");
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
-            int fgsr_sr_mode = static_cast<int>(m_ui.FGSR_SR_Mode);
-            ImGui::Combo("##FGSR_SRMode", &fgsr_sr_mode, "Off\0Shader\0TRT+CUDA\0TRT+CS\0TRT+CUDA-6ch\0TRT+CS-6ch\0QuickSR+CUDA\0QuickSR+CS\0SR4x+CUDA\0SR4x+CS\0");
-            m_ui.FGSR_SR_Mode = static_cast<sl::FGSR_SRMode>(fgsr_sr_mode);
 
-            // Scale factor selection (1x, 2x or 4x) - only for Shader mode
-            // TRT modes are fixed at 2x upscaling, SR4x modes are fixed at 4x
-            if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
+            // 主模式选择: Off, Shader, TRT+CS, TRT+CUDA
+            ImGui::Combo("##FGSR_SRMainMode", &m_ui.FGSR_SR_MainMode, "Off\0Shader\0TRT+CS\0TRT+CUDA\0");
+
+            if (m_ui.FGSR_SR_MainMode != 0)  // 非 Off 模式
             {
+                // 倍率选择: 1x, 2x, 4x
                 ImGui::Text("Scale Factor");
                 ImGui::SameLine();
-                // scaleIndex: 0=1x, 1=2x, 2=4x
-                int scaleIndex = (m_ui.FGSR_SR_ScaleFactor == 4) ? 2 : (m_ui.FGSR_SR_ScaleFactor - 1);
-                if (ImGui::Combo("##FGSR_SRScale", &scaleIndex, "1x (No upscaling)\0002x Upscaling\0004x Upscaling\0"))
+                int scaleIndex = (m_ui.FGSR_SR_ScaleFactor == 4) ? 2 : (m_ui.FGSR_SR_ScaleFactor == 2) ? 1 : 0;
+                if (ImGui::Combo("##FGSR_SRScale", &scaleIndex, "1x\0002x\0004x\0"))
                 {
-                    m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex + 1);
-                }
-            }
-
-            // Blend mode toggle - only for non-Off modes
-            if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
-            {
-                ImGui::Checkbox("Use Blend", &m_ui.FGSR_SR_UseBlend);
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("ON: First frame upsample + subsequent frames blend\nOFF: Upsample every frame (no blend)");
+                    m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex == 1) ? 2 : 1;
                 }
 
+                // 时序模式 - 根据主模式显示不同选项
+                ImGui::Text("Temporal Mode");
+                ImGui::SameLine();
+                if (m_ui.FGSR_SR_MainMode == 1)  // Shader 模式
+                {
+                    ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_ShaderTemporalMode,
+                        "Jitter Upsample\0Jitter Upsample+Blend\0First Jitter+Blend\0Passthrough\0Passthrough+Jitter\0");
+                }
+                else  // TRT 模式
+                {
+                    ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_TRTTemporalMode,
+                        "Upsample\0Upsample+Jitter\0Upsample+Blend\0");
+                }
+
+                // Jitter 选项
                 ImGui::Checkbox("Use Jitter", &m_ui.FGSR_SR_UseJitter);
                 if (ImGui::IsItemHovered())
                 {
-                    ImGui::SetTooltip("ON: Use TAA jitter for temporal accumulation\nOFF: No jitter (same subpixel every frame)");
+                    ImGui::SetTooltip("ON: Use TAA jitter for rendering\nOFF: No jitter");
                 }
 
-                ImGui::Checkbox("Jitter Resample", &m_ui.FGSR_SR_UseJitterResample);
-                if (ImGui::IsItemHovered())
+                if (m_ui.FGSR_SR_UseJitter)
                 {
-                    ImGui::SetTooltip("ON: Apply jitter-based resampling after TRT super-resolution\nOFF: No jitter resample");
+                    ImGui::Checkbox("Test Jitter", &m_ui.FGSR_SR_TestJitter);
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("ON: Fixed offset + per-frame shake for testing\nOFF: Normal TAA jitter");
+                    }
+
+                    if (m_ui.FGSR_SR_TestJitter)
+                    {
+                        ImGui::Text("Shake X/Y");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60);
+                        ImGui::InputFloat("##ShakeX", &m_ui.FGSR_SR_TestJitterX, 0.0f, 0.0f, "%.2f");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60);
+                        ImGui::InputFloat("##ShakeY", &m_ui.FGSR_SR_TestJitterY, 0.0f, 0.0f, "%.2f");
+                    }
                 }
             }
+
+            // 计算最终的 FGSR_SR_Mode
+            if (m_ui.FGSR_SR_MainMode == 0)
+            {
+                m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
+            }
+            else if (m_ui.FGSR_SR_MainMode == 1)  // Shader
+            {
+                m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eShader;
+            }
+            else  // TRT+CS 或 TRT+CUDA
+            {
+                bool useCUDA = (m_ui.FGSR_SR_MainMode == 3);
+                if (m_ui.FGSR_SR_ScaleFactor == 1)
+                {
+                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eTRT_CUDA : sl::FGSR_SRMode::eTRT_CS;
+                }
+                else if (m_ui.FGSR_SR_ScaleFactor == 2)
+                {
+                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eQuickSR_CUDA : sl::FGSR_SRMode::eQuickSR_CS;
+                }
+                else  // 4x
+                {
+                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eSR4x_CUDA : sl::FGSR_SRMode::eSR4x_CS;
+                }
+            }
+
             if (! m_ui.FGSR_SR_Supported) popDisabled();
 
             if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;

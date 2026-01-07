@@ -496,15 +496,41 @@ bool StreamlineSample::SetupView()
     if (m_TemporalAntiAliasingPass) m_TemporalAntiAliasingPass->SetJitter(m_ui.TemporalAntiAliasingJitter);
 
     // 判断是否需要 jitter
-    bool needJitter = (m_ui.AAMode != AntiAliasingMode::NONE);
+    float2 pixelOffset = float2(0.f);
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // FGSR 模式下，根据 UseJitter 开关决定
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseJitter)
+    // FGSR 模式：UseJitter 开关控制 jitter
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
     {
-        needJitter = true;
+        if (m_ui.FGSR_SR_UseJitter)
+        {
+            if (m_ui.FGSR_SR_TestJitter)
+            {
+                // 测试模式：固定偏移 + 每帧抖动
+                static int debugFrameCount = 0;
+                debugFrameCount++;
+                float sign = (debugFrameCount % 2 == 0) ? 1.0f : -1.0f;
+                float shakeX = m_ui.FGSR_SR_TestJitterX * sign;
+                float shakeY = m_ui.FGSR_SR_TestJitterY * sign;
+                float testOffsetX = 0.2f * m_RenderingRectSize.x + shakeX;  // 固定偏移20% + 抖动
+                float testOffsetY = 0.1f * m_RenderingRectSize.y + shakeY;  // 固定偏移10% + 抖动
+                pixelOffset = float2(testOffsetX, testOffsetY);
+            }
+            else
+            {
+                // 普通模式：使用 TAA jitter
+                pixelOffset = m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
+            }
+        }
+        // else: UseJitter 关闭时，pixelOffset 保持 0，无任何 jitter
     }
+    else
 #endif
-    float2 pixelOffset = needJitter && m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
+    {
+        // 非 FGSR 模式：使用默认 TAA jitter
+        bool needJitter = (m_ui.AAMode != AntiAliasingMode::NONE);
+        pixelOffset = needJitter && m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
+    }
 
     std::shared_ptr<PlanarView> planarView = std::dynamic_pointer_cast<PlanarView, IView>(m_View);
 
@@ -1527,11 +1553,31 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.depth_diff_threshold = 0.003f;
         fgsr_sr_consts.maxFlowWeight = 0.01f;
 
-        // Blend mode
-        fgsr_sr_consts.useBlend = m_ui.FGSR_SR_UseBlend;
-
-        // Jitter resample for TAA temporal accumulation
-        fgsr_sr_consts.useJitterResample = m_ui.FGSR_SR_UseJitterResample;
+        // Temporal mode - 根据主模式映射
+        if (m_ui.FGSR_SR_MainMode == 1)  // Shader 模式
+        {
+            // Shader: 0=JitterUpsample, 1=JitterUpsample+Blend, 2=FirstJitter+Blend, 3=Passthrough, 4=Passthrough+Jitter
+            switch (m_ui.FGSR_SR_ShaderTemporalMode)
+            {
+            case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsample; break;
+            case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsampleBlend; break;
+            case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderFirstJitterBlend; break;
+            case 3: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::ePassthrough; break;
+            case 4: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::ePassthroughJitter; break;
+            default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsample; break;
+            }
+        }
+        else  // TRT 模式
+        {
+            // TRT: 0=Upsample, 1=Upsample+Jitter, 2=Upsample+Blend
+            switch (m_ui.FGSR_SR_TRTTemporalMode)
+            {
+            case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsample; break;
+            case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsampleJitter; break;
+            case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsampleBlend; break;
+            default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsample; break;
+            }
+        }
 
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
