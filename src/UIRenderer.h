@@ -475,21 +475,20 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
 
-            // 主开关: Off/On
-            int enabledIndex = m_ui.FGSR_SR_Enabled ? 1 : 0;
-            if (ImGui::Combo("##FGSR_SREnabled", &enabledIndex, "Off\0On\0"))
-            {
-                m_ui.FGSR_SR_Enabled = (enabledIndex == 1);
-            }
+            // 主模式: Off / First Frame Upsample+Blend / Every Frame Upsample+Blend
+            ImGui::Combo("##FGSR_SRMode", reinterpret_cast<int*>(&m_ui.FGSR_SR_Mode),
+                "Off\0First Frame Upsample+Blend\0Every Frame Upsample+Blend\0");
 
-            if (m_ui.FGSR_SR_Enabled)
+            if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
             {
+                // ========== 通用选项 ==========
+                ImGui::Separator();
+                ImGui::Text("Upsample Options");
+
                 // TRT 开关
                 ImGui::Checkbox("Use TRT", &m_ui.FGSR_SR_UseTRT);
                 if (ImGui::IsItemHovered())
-                {
                     ImGui::SetTooltip("ON: TensorRT neural network upsampling\nOFF: Shader bilinear upsampling");
-                }
 
                 // TRT 后端选择 (仅当 UseTRT=true 时显示)
                 if (m_ui.FGSR_SR_UseTRT)
@@ -508,26 +507,44 @@ protected:
                     m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex == 1) ? 2 : 1;
                 }
 
-                // 时序模式 - 统一选项
-                ImGui::Text("Temporal Mode");
-                ImGui::SameLine();
-                ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_TemporalMode,
-                    "Upsample\0Upsample+JitFix\0Upsample+Blend\0Upsample+BlendAll\0Upsample+JitFix+Blend\0JitFix+Upsample\0NoJitFixUpsample\0NoJitFixUpsample+JitFix\0NoJitFixUpsample+JitFix+Blend\0JitFix+NoJitFixUpsample\0JitFix+NoJitFixUpsample+Blend\0");
+                // ========== EveryFrameUpsampleBlend 模式的步骤开关 ==========
+                if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eEveryFrameUpsampleBlend)
+                {
+                    ImGui::Separator();
+                    ImGui::Text("Pipeline Steps");
 
-                // Jitter 选项
+                    ImGui::Checkbox("Upsample", &m_ui.FGSR_SR_DoUpsample);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Execute upsampling step");
+
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Blend", &m_ui.FGSR_SR_DoBlend);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Execute temporal blend step");
+
+                    ImGui::Checkbox("JitterFix Before Up", &m_ui.FGSR_SR_DoJitterFixBeforeUp);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Apply jitter fix before upsampling (low-res)");
+
+                    ImGui::SameLine();
+                    ImGui::Checkbox("JitterFix Before Blend", &m_ui.FGSR_SR_DoJitterFixBeforeBlend);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Apply jitter fix before blending (high-res)");
+                }
+
+                // ========== Jitter 选项 ==========
+                ImGui::Separator();
+                ImGui::Text("Jitter Options");
+
                 ImGui::Checkbox("Use Jitter", &m_ui.FGSR_SR_UseJitter);
                 if (ImGui::IsItemHovered())
-                {
                     ImGui::SetTooltip("ON: Use TAA jitter for rendering\nOFF: No jitter");
-                }
 
                 if (m_ui.FGSR_SR_UseJitter)
                 {
                     ImGui::Checkbox("Test Jitter", &m_ui.FGSR_SR_TestJitter);
                     if (ImGui::IsItemHovered())
-                    {
                         ImGui::SetTooltip("ON: Fixed offset + per-frame shake for testing\nOFF: Normal TAA jitter");
-                    }
 
                     if (m_ui.FGSR_SR_TestJitter)
                     {
@@ -541,7 +558,7 @@ protected:
                     }
                 }
 
-                // Blend shader debug controls
+                // ========== Debug 选项 ==========
                 ImGui::Separator();
                 ImGui::Checkbox("New Blend Logic", &m_ui.FGSR_SR_UseNewBlendLogic);
                 if (ImGui::IsItemHovered())
@@ -553,30 +570,15 @@ protected:
                     "Normal\0Color\0MV\0Depth\0");
             }
 
-            // 计算最终的 FGSR_SR_Mode
-            if (!m_ui.FGSR_SR_Enabled)
+            // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)
+            if (!m_ui.FGSR_SR_UseTRT)
             {
-                m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
+                m_ui.FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;
             }
-            else if (!m_ui.FGSR_SR_UseTRT)  // Shader 模式
+            else
             {
-                m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eShader;
-            }
-            else  // TRT 模式
-            {
-                bool useCUDA = (m_ui.FGSR_SR_TRTBackend == 1);
-                if (m_ui.FGSR_SR_ScaleFactor == 1)
-                {
-                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eTRT_CUDA : sl::FGSR_SRMode::eTRT_CS;
-                }
-                else if (m_ui.FGSR_SR_ScaleFactor == 2)
-                {
-                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eQuickSR_CUDA : sl::FGSR_SRMode::eQuickSR_CS;
-                }
-                else  // 4x
-                {
-                    m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eSR4x_CUDA : sl::FGSR_SRMode::eSR4x_CS;
-                }
+                m_ui.FGSR_SR_UpsampleMode = (m_ui.FGSR_SR_TRTBackend == 1) ?
+                    sl::FGSR_UpsampleMode::eTRT_CUDA : sl::FGSR_UpsampleMode::eTRT_CS;
             }
 
             if (! m_ui.FGSR_SR_Supported) popDisabled();

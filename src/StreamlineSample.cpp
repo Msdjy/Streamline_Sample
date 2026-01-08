@@ -966,17 +966,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     m_ui.DLSS_Last_AA = m_ui.AAMode;
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // Reset FGSR_SR vars if we stop using it or change effective scale factor
-    // Shader mode uses user-selected scale, TRT modes use 2x, SR4x modes use 4x
+    // Reset FGSR_SR vars if we stop using it or change scale factor
     {
-        int effectiveScale = 1;
-        if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
-            effectiveScale = m_ui.FGSR_SR_ScaleFactor;
-        else if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CUDA ||
-                 m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CS)
-            effectiveScale = 4;
-        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
-            effectiveScale = 2;
+        int effectiveScale = m_ui.FGSR_SR_ScaleFactor;
 
         if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
             (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || effectiveScale != m_FGSR_SR_Last_ScaleFactor))
@@ -1119,24 +1111,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     // If FGSR_SR is enabled, set render size accordingly
     if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
     {
-        // Shader mode: use user-selected scale factor (1x or 2x)
-        // TRT modes: always use 2x upscaling
-        // SR4x modes: always use 4x upscaling
-        int scaleFactor = 1;
-        if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eShader)
-        {
-            scaleFactor = m_ui.FGSR_SR_ScaleFactor;
-        }
-        else if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CUDA ||
-                 m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eSR4x_CS)
-        {
-            scaleFactor = 4;  // 4x超分模型
-        }
-        else
-        {
-            scaleFactor = 2;  // 其他TRT模式使用2x
-        }
-
+        int scaleFactor = m_ui.FGSR_SR_ScaleFactor;
         if (scaleFactor > 1)
         {
             m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
@@ -1538,7 +1513,13 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
         // FGSR_SR SETUP
         auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+
+        // 主模式
         fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+        fgsr_sr_consts.upsampleMode = m_ui.FGSR_SR_UpsampleMode;
+        fgsr_sr_consts.scaleFactor = (uint32_t)m_ui.FGSR_SR_ScaleFactor;
+
+        // 分辨率
         fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
         fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
 
@@ -1553,24 +1534,13 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.depth_diff_threshold = 0.003f;
         fgsr_sr_consts.maxFlowWeight = 0.01f;
 
-        // Temporal mode - 直接映射，是否用TRT由插件内根据mode判断
-        switch (m_ui.FGSR_SR_TemporalMode)
-        {
-        case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsample; break;
-        case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleJitterFix; break;
-        case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleBlend; break;
-        case 3: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleBlendAll; break;
-        case 4: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleJitterFixBlend; break;
-        case 5: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixUpsample; break;
-        case 6: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsample; break;
-        case 7: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsampleJitterFix; break;
-        case 8: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsampleJitterFixBlend; break;
-        case 9: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixNoJitterFixUpsample; break;
-        case 10: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixNoJitterFixUpsampleBlend; break;
-        default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsample; break;
-        }
+        // EveryFrameUpsampleBlend 模式的步骤开关
+        fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
+        fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
+        fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
+        fgsr_sr_consts.doJitterFixBeforeBlend = m_ui.FGSR_SR_DoJitterFixBeforeBlend ? 1 : 0;
 
-        // Blend shader 测试开关
+        // Debug 选项
         fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
         fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
 

@@ -199,18 +199,29 @@ public:
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     // FGSR_SR specific parameters
     bool                                FGSR_SR_Supported = false;
-    sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;  // 最终计算出的模式
-    bool                                FGSR_SR_Enabled = false;  // 主开关: Off/On
-    bool                                FGSR_SR_UseTRT = false;   // 是否使用TRT上采样
-    int                                 FGSR_SR_TRTBackend = 0;   // TRT后端: 0=CS, 1=CUDA
-    int                                 FGSR_SR_ScaleFactor = 2;  // 1=1x, 2=2x, 4=4x
-    bool                                FGSR_SR_UseJitter = true; // true=渲染时使用TAA jitter, false=不使用
-    bool                                FGSR_SR_TestJitter = false; // true=使用测试抖动值, false=使用普通TAA jitter
-    float                               FGSR_SR_TestJitterX = 0.25f; // 每帧抖动X像素值
-    float                               FGSR_SR_TestJitterY = 0.25f; // 每帧抖动Y像素值
-    int                                 FGSR_SR_TemporalMode = 0; // 见UIRenderer.h中的Combo选项
+
+    // 主模式: 0=Off, 1=FirstFrameUpsampleBlend, 2=EveryFrameUpsampleBlend
+    sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
+
+    // 通用选项 (所有非 Off 模式都有)
+    bool                                FGSR_SR_UseTRT = false;       // 是否使用 TRT 上采样
+    int                                 FGSR_SR_TRTBackend = 0;       // TRT 后端: 0=CS, 1=CUDA
+    int                                 FGSR_SR_ScaleFactor = 2;      // 放大倍率: 1=1x, 2=2x, 4=4x
+    bool                                FGSR_SR_UseJitter = true;     // 渲染时使用 TAA jitter
+    bool                                FGSR_SR_TestJitter = false;   // 使用测试抖动值
+    float                               FGSR_SR_TestJitterX = 0.25f;
+    float                               FGSR_SR_TestJitterY = 0.25f;
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
-    int                                 FGSR_SR_DebugOutput = 0;  // 0=正常, 1=color, 2=mv, 3=depth
+    int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
+
+    // EveryFrameUpsampleBlend 模式的步骤开关
+    bool                                FGSR_SR_DoUpsample = true;
+    bool                                FGSR_SR_DoBlend = true;
+    bool                                FGSR_SR_DoJitterFixBeforeUp = false;
+    bool                                FGSR_SR_DoJitterFixBeforeBlend = false;
+
+    // 计算出的上采样模式 (供内部使用)
+    sl::FGSR_UpsampleMode               FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;
 #endif
 
     // DeepDVC specific parameters
