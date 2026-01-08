@@ -1553,30 +1553,21 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.depth_diff_threshold = 0.003f;
         fgsr_sr_consts.maxFlowWeight = 0.01f;
 
-        // Temporal mode - 根据主模式映射
-        if (m_ui.FGSR_SR_MainMode == 1)  // Shader 模式
+        // Temporal mode - 直接映射，是否用TRT由插件内根据mode判断
+        switch (m_ui.FGSR_SR_TemporalMode)
         {
-            // Shader: 0=JitterUpsample, 1=JitterUpsample+Blend, 2=FirstJitter+Blend, 3=Passthrough, 4=Passthrough+Jitter
-            switch (m_ui.FGSR_SR_ShaderTemporalMode)
-            {
-            case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsample; break;
-            case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsampleBlend; break;
-            case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderFirstJitterBlend; break;
-            case 3: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::ePassthrough; break;
-            case 4: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::ePassthroughJitter; break;
-            default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eShaderJitterUpsample; break;
-            }
-        }
-        else  // TRT 模式
-        {
-            // TRT: 0=Upsample, 1=Upsample+Jitter, 2=Upsample+Blend
-            switch (m_ui.FGSR_SR_TRTTemporalMode)
-            {
-            case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsample; break;
-            case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsampleJitter; break;
-            case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsampleBlend; break;
-            default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eTRTUpsample; break;
-            }
+        case 0: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsample; break;
+        case 1: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleJitterFix; break;
+        case 2: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleBlend; break;
+        case 3: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleBlendAll; break;
+        case 4: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsampleJitterFixBlend; break;
+        case 5: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixUpsample; break;
+        case 6: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsample; break;
+        case 7: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsampleJitterFix; break;
+        case 8: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eNoJitterFixUpsampleJitterFixBlend; break;
+        case 9: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixNoJitterFixUpsample; break;
+        case 10: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eJitterFixNoJitterFixUpsampleBlend; break;
+        default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsample; break;
         }
 
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);

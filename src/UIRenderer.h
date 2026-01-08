@@ -475,11 +475,30 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
 
-            // 主模式选择: Off, Shader, TRT+CS, TRT+CUDA
-            ImGui::Combo("##FGSR_SRMainMode", &m_ui.FGSR_SR_MainMode, "Off\0Shader\0TRT+CS\0TRT+CUDA\0");
-
-            if (m_ui.FGSR_SR_MainMode != 0)  // 非 Off 模式
+            // 主开关: Off/On
+            int enabledIndex = m_ui.FGSR_SR_Enabled ? 1 : 0;
+            if (ImGui::Combo("##FGSR_SREnabled", &enabledIndex, "Off\0On\0"))
             {
+                m_ui.FGSR_SR_Enabled = (enabledIndex == 1);
+            }
+
+            if (m_ui.FGSR_SR_Enabled)
+            {
+                // TRT 开关
+                ImGui::Checkbox("Use TRT", &m_ui.FGSR_SR_UseTRT);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("ON: TensorRT neural network upsampling\nOFF: Shader bilinear upsampling");
+                }
+
+                // TRT 后端选择 (仅当 UseTRT=true 时显示)
+                if (m_ui.FGSR_SR_UseTRT)
+                {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(80);
+                    ImGui::Combo("##TRTBackend", &m_ui.FGSR_SR_TRTBackend, "CS\0CUDA\0");
+                }
+
                 // 倍率选择: 1x, 2x, 4x
                 ImGui::Text("Scale Factor");
                 ImGui::SameLine();
@@ -489,19 +508,11 @@ protected:
                     m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex == 1) ? 2 : 1;
                 }
 
-                // 时序模式 - 根据主模式显示不同选项
+                // 时序模式 - 统一选项
                 ImGui::Text("Temporal Mode");
                 ImGui::SameLine();
-                if (m_ui.FGSR_SR_MainMode == 1)  // Shader 模式
-                {
-                    ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_ShaderTemporalMode,
-                        "Jitter Upsample\0Jitter Upsample+Blend\0First Jitter+Blend\0Passthrough\0Passthrough+Jitter\0");
-                }
-                else  // TRT 模式
-                {
-                    ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_TRTTemporalMode,
-                        "Upsample\0Upsample+Jitter\0Upsample+Blend\0");
-                }
+                ImGui::Combo("##FGSR_SR Temporal Mode", &m_ui.FGSR_SR_TemporalMode,
+                    "Upsample\0Upsample+JitFix\0Upsample+Blend\0Upsample+BlendAll\0Upsample+JitFix+Blend\0JitFix+Upsample\0NoJitFixUpsample\0NoJitFixUpsample+JitFix\0NoJitFixUpsample+JitFix+Blend\0JitFix+NoJitFixUpsample\0JitFix+NoJitFixUpsample+Blend\0");
 
                 // Jitter 选项
                 ImGui::Checkbox("Use Jitter", &m_ui.FGSR_SR_UseJitter);
@@ -532,17 +543,17 @@ protected:
             }
 
             // 计算最终的 FGSR_SR_Mode
-            if (m_ui.FGSR_SR_MainMode == 0)
+            if (!m_ui.FGSR_SR_Enabled)
             {
                 m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
             }
-            else if (m_ui.FGSR_SR_MainMode == 1)  // Shader
+            else if (!m_ui.FGSR_SR_UseTRT)  // Shader 模式
             {
                 m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eShader;
             }
-            else  // TRT+CS 或 TRT+CUDA
+            else  // TRT 模式
             {
-                bool useCUDA = (m_ui.FGSR_SR_MainMode == 3);
+                bool useCUDA = (m_ui.FGSR_SR_TRTBackend == 1);
                 if (m_ui.FGSR_SR_ScaleFactor == 1)
                 {
                     m_ui.FGSR_SR_Mode = useCUDA ? sl::FGSR_SRMode::eTRT_CUDA : sl::FGSR_SRMode::eTRT_CS;

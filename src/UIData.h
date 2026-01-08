@@ -200,14 +200,15 @@ public:
     // FGSR_SR specific parameters
     bool                                FGSR_SR_Supported = false;
     sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;  // 最终计算出的模式
-    int                                 FGSR_SR_MainMode = 0;     // 0=Off, 1=Shader, 2=TRT+CS, 3=TRT+CUDA
+    bool                                FGSR_SR_Enabled = false;  // 主开关: Off/On
+    bool                                FGSR_SR_UseTRT = false;   // 是否使用TRT上采样
+    int                                 FGSR_SR_TRTBackend = 0;   // TRT后端: 0=CS, 1=CUDA
     int                                 FGSR_SR_ScaleFactor = 2;  // 1=1x, 2=2x, 4=4x
     bool                                FGSR_SR_UseJitter = true; // true=渲染时使用TAA jitter, false=不使用
     bool                                FGSR_SR_TestJitter = false; // true=使用测试抖动值, false=使用普通TAA jitter
     float                               FGSR_SR_TestJitterX = 0.25f; // 每帧抖动X像素值
     float                               FGSR_SR_TestJitterY = 0.25f; // 每帧抖动Y像素值
-    int                                 FGSR_SR_ShaderTemporalMode = 0; // Shader: 0=Jitter上采样, 1=Jitter上采样+Blend, 2=First+Blend, 3=Passthrough, 4=Passthrough+Jitter
-    int                                 FGSR_SR_TRTTemporalMode = 0;    // TRT: 0=上采样, 1=上采样+Jitter, 2=上采样+Blend
+    int                                 FGSR_SR_TemporalMode = 0; // 见UIRenderer.h中的Combo选项
 #endif
 
     // DeepDVC specific parameters
