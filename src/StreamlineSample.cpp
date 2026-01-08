@@ -1570,6 +1570,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         default: fgsr_sr_consts.temporalMode = sl::FGSR_TemporalMode::eUpsample; break;
         }
 
+        // Blend shader 测试开关
+        fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
+        fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
         // Prepare resources state

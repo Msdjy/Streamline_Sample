@@ -540,6 +540,17 @@ protected:
                         ImGui::InputFloat("##ShakeY", &m_ui.FGSR_SR_TestJitterY, 0.0f, 0.0f, "%.2f");
                     }
                 }
+
+                // Blend shader debug controls
+                ImGui::Separator();
+                ImGui::Checkbox("New Blend Logic", &m_ui.FGSR_SR_UseNewBlendLogic);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Enable new blend shader logic (adapts to high-res input)");
+
+                ImGui::Text("Debug Output");
+                ImGui::SameLine();
+                ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
+                    "Normal\0Color\0MV\0Depth\0");
             }
 
             // 计算最终的 FGSR_SR_Mode

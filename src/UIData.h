@@ -209,6 +209,8 @@ public:
     float                               FGSR_SR_TestJitterX = 0.25f; // 每帧抖动X像素值
     float                               FGSR_SR_TestJitterY = 0.25f; // 每帧抖动Y像素值
     int                                 FGSR_SR_TemporalMode = 0; // 见UIRenderer.h中的Combo选项
+    bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
+    int                                 FGSR_SR_DebugOutput = 0;  // 0=正常, 1=color, 2=mv, 3=depth
 #endif
 
     // DeepDVC specific parameters
