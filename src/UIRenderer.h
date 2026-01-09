@@ -564,10 +564,18 @@ protected:
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Enable new blend shader logic (adapts to high-res input)");
 
+                ImGui::Checkbox("History Depth Jitter Fix", &m_ui.FGSR_SR_UseHistoryDepthJitterFix);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Fix historyDepth sampling using prevJitterOffset (reduces edge flickering)");
+
+                ImGui::Checkbox("Color Jitter Fix (in Blend)", &m_ui.FGSR_SR_UseColorJitterFix);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Do color jitter fix inside blend shader (instead of separate JitterResample pass)");
+
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
-                    "Normal\0Color\0MV\0Depth\0");
+                    "Normal\0Color\0MV\0Depth\0HistoryColor\0HistDepth(Fix)\0HistDepth(Raw)\0DepthDiff\0Jitter\0ColorDiff\0ColorDiffLuma\0BlendState\0DepthEdge\0Weight\0");
             }
 
             // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)

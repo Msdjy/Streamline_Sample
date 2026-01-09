@@ -212,6 +212,8 @@ public:
     float                               FGSR_SR_TestJitterX = 0.25f;
     float                               FGSR_SR_TestJitterY = 0.25f;
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
+    bool                                FGSR_SR_UseHistoryDepthJitterFix = true;  // 用 prevJitterOffset 修复 historyDepth 采样
+    bool                                FGSR_SR_UseColorJitterFix = false;  // 在 blend 内部做 color jitter 修复
     int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
 
     // EveryFrameUpsampleBlend 模式的步骤开关

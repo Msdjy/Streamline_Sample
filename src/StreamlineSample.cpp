@@ -1542,6 +1542,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
         // Debug 选项
         fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
+        fgsr_sr_consts.useHistoryDepthJitterFix = m_ui.FGSR_SR_UseHistoryDepthJitterFix ? 1 : 0;
+        fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
         fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
 
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
