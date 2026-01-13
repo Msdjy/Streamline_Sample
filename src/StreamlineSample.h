@@ -37,6 +37,7 @@
 #include "NVWrapper.h"
 #include "RenderTargets.h"
 #include "UIData.h"
+#include "UnjitteredDepthMVPass.h"
 #include <random>
 #include <chrono>
 
@@ -180,6 +181,7 @@ private:
     std::shared_ptr<DepthPass>                      m_ShadowDepthPass;
     std::shared_ptr<InstancedOpaqueDrawStrategy>    m_OpaqueDrawStrategy;
     std::unique_ptr<GBufferFillPass>                m_GBufferPass;
+    std::unique_ptr<UnjitteredDepthMVPass>          m_UnjitteredDepthMVPass;
     std::unique_ptr<DeferredLightingPass>           m_DeferredLightingPass;
     std::unique_ptr<SkyPass>                        m_SkyPass;
     std::unique_ptr<TemporalAntiAliasingPass>       m_TemporalAntiAliasingPass;

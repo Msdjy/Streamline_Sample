@@ -572,6 +572,10 @@ protected:
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Do color jitter fix inside blend shader (instead of separate JitterResample pass)");
 
+                ImGui::Checkbox("Use Unjittered Depth/MV Pass", &m_ui.FGSR_SR_UseUnjitteredDepthMV);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Render separate unjittered pass for Depth and MV\n(avoids jitter correction in plugin, renders scene twice)");
+
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,

@@ -940,14 +940,62 @@ sl::Resource SLWrapper::allocateResourceCallback(const sl::ResourceAllocationDes
             ID3D12Device* pd3d12Device = (ID3D12Device*)device;
             ID3D12Resource* ptexture;
             D3D12_CLEAR_VALUE* pClearValue = nullptr;
-            D3D12_CLEAR_VALUE clearValue;
-            // specify the clear value to avoid D3D warnings on ClearRenderTarget()
-            if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
+            D3D12_CLEAR_VALUE clearValue = {};
+
+            // D3D12 Rule: pOptimizedClearValue->Format CANNOT be a typeless format.
+            // For typeless resources, we simply don't set a clear value (it's optional).
+            // This is the safest approach as CreateCommittedResource accepts nullptr for pOptimizedClearValue.
+
+            // Helper lambda to check if format is typeless
+            auto isTypelessFormat = [](DXGI_FORMAT format) -> bool {
+                switch (format)
+                {
+                case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+                case DXGI_FORMAT_R32G32B32_TYPELESS:
+                case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+                case DXGI_FORMAT_R32G32_TYPELESS:
+                case DXGI_FORMAT_R32G8X24_TYPELESS:
+                case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+                case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+                case DXGI_FORMAT_R16G16_TYPELESS:
+                case DXGI_FORMAT_R32_TYPELESS:
+                case DXGI_FORMAT_R24G8_TYPELESS:
+                case DXGI_FORMAT_R8G8_TYPELESS:
+                case DXGI_FORMAT_R16_TYPELESS:
+                case DXGI_FORMAT_R8_TYPELESS:
+                case DXGI_FORMAT_BC1_TYPELESS:
+                case DXGI_FORMAT_BC2_TYPELESS:
+                case DXGI_FORMAT_BC3_TYPELESS:
+                case DXGI_FORMAT_BC4_TYPELESS:
+                case DXGI_FORMAT_BC5_TYPELESS:
+                case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+                case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+                case DXGI_FORMAT_BC6H_TYPELESS:
+                case DXGI_FORMAT_BC7_TYPELESS:
+                    return true;
+                default:
+                    return false;
+                }
+            };
+
+            // Only set clear value for non-typeless formats
+            if (!isTypelessFormat(desc->Format))
             {
-                clearValue.Format = desc->Format;
-                memset(clearValue.Color, 0, sizeof(clearValue.Color));
-                pClearValue = &clearValue;
+                if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
+                {
+                    clearValue.Format = desc->Format;
+                    clearValue.DepthStencil.Depth = 0.0f;
+                    clearValue.DepthStencil.Stencil = 0;
+                    pClearValue = &clearValue;
+                }
+                else if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
+                {
+                    clearValue.Format = desc->Format;
+                    memset(clearValue.Color, 0, sizeof(clearValue.Color));
+                    pClearValue = &clearValue;
+                }
             }
+            // For typeless formats, pClearValue remains nullptr (which is valid)
             // 共享资源需要 D3D12_HEAP_FLAG_SHARED
             D3D12_HEAP_FLAGS heapFlags = D3D12_HEAP_FLAG_NONE;
             if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS)

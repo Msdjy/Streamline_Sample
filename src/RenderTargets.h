@@ -64,6 +64,10 @@ public:
     nvrhi::TextureHandle GBufferNormalsRR;
     nvrhi::TextureHandle GBufferEmissiveRR;
 
+    // Unjittered depth and motion vectors for FGSR
+    nvrhi::TextureHandle UnjitteredDepth;
+    nvrhi::TextureHandle UnjitteredMV;
+
     nvrhi::HeapHandle Heap;
 
     std::shared_ptr<donut::engine::FramebufferFactory> ForwardFramebuffer;
@@ -74,6 +78,7 @@ public:
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SROutputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SRInputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> SpecHitDistanceBuffer;
+    std::shared_ptr<donut::engine::FramebufferFactory> UnjitteredDepthMVFramebuffer;
 
     donut::math::int2 m_RenderSize;// size of render targets pre-DLSS
     donut::math::int2 m_DisplaySize; // size of render targets post-DLSS
@@ -133,6 +138,31 @@ public:
         desc.initialState = nvrhi::ResourceStates::RenderTarget;
         desc.debugName = "FGSR_SRInput";
         FGSR_SRInput = device->createTexture(desc);
+
+        // UnjitteredDepth: renderSize, for FGSR unjittered depth
+        {
+            nvrhi::TextureDesc depthDesc;
+            depthDesc.width = renderSize.x;
+            depthDesc.height = renderSize.y;
+            depthDesc.format = nvrhi::Format::D24S8;
+            depthDesc.isTypeless = true;
+            depthDesc.isRenderTarget = true;
+            depthDesc.useClearValue = true;
+            depthDesc.clearValue = useReverseProjection ? nvrhi::Color(0.f) : nvrhi::Color(1.f);
+            depthDesc.sampleCount = 1;
+            depthDesc.dimension = nvrhi::TextureDimension::Texture2D;
+            depthDesc.initialState = nvrhi::ResourceStates::DepthWrite;
+            depthDesc.keepInitialState = true;
+            depthDesc.debugName = "UnjitteredDepth";
+            UnjitteredDepth = device->createTexture(depthDesc);
+        }
+
+        // UnjitteredMV: renderSize, RG16_FLOAT for motion vectors
+        desc.format = nvrhi::Format::RG16_FLOAT;
+        desc.isUAV = false;
+        desc.initialState = nvrhi::ResourceStates::RenderTarget;
+        desc.debugName = "UnjitteredMV";
+        UnjitteredMV = device->createTexture(desc);
 
         desc.format = nvrhi::Format::RGBA16_FLOAT;
         desc.width = displaySize.x;
@@ -213,8 +243,7 @@ public:
                 FGSR_SRInput,
                 NisColor,
                 AmbientOcclusion,
-                GBufferSpecularRR,
-                GBufferDiffuseRR
+                UnjitteredMV
             };
 
             for (auto texture : textures)
@@ -267,6 +296,11 @@ public:
 
         FGSR_SRInputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         FGSR_SRInputFramebuffer->RenderTargets = { FGSR_SRInput };
+
+        // Unjittered Depth + MV framebuffer for FGSR
+        UnjitteredDepthMVFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
+        UnjitteredDepthMVFramebuffer->RenderTargets = { UnjitteredMV };
+        UnjitteredDepthMVFramebuffer->DepthTarget = UnjitteredDepth;
     }
 
     bool IsUpdateRequired(donut::math::int2 renderSize, donut::math::int2 displaySize, donut::math::uint sampleCount = 1) const
@@ -291,5 +325,10 @@ public:
         commandList->clearTextureFloat(GBufferSpecularRR, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(GBufferNormalsRR, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(GBufferEmissiveRR, nvrhi::AllSubresources, nvrhi::Color(0.f));
+
+        // Clear unjittered depth and MV
+        float depthClearValue = m_UseReverseProjection ? 0.f : 1.f;
+        commandList->clearDepthStencilTexture(UnjitteredDepth, nvrhi::AllSubresources, true, depthClearValue, false, 0);
+        commandList->clearTextureFloat(UnjitteredMV, nvrhi::AllSubresources, nvrhi::Color(0.f));
     }
 };

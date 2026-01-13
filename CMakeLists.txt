@@ -146,12 +146,15 @@ if(USE_SL)
         "src/UIRenderer.h"
         "src/RenderTargets.h"
         "src/UIData.h"
+        "src/UnjitteredDepthMVPass.h"
+        "src/unjittered_depth_mv_cb.h"
     )
     file(GLOB src_source
         "src/main.cpp"
         "src/StreamlineSample.cpp"
         "src/SLWrapper.cpp"
         "src/NVWrapper.cpp"
+        "src/UnjitteredDepthMVPass.cpp"
     )
     # Find all HLSL files in the src/shaders directory
     set(folder "StreamlineSampleFolder")
@@ -162,6 +165,7 @@ if(USE_SL)
         CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders.cfg
         FOLDER ${folder}
         OUTPUT_BASE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/StreamlineSample
+        INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 
 else()
@@ -172,12 +176,15 @@ else()
         "src/UIRenderer.h"
         "src/RenderTargets.h"
         "src/UIData.h"
+        "src/UnjitteredDepthMVPass.h"
+        "src/unjittered_depth_mv_cb.h"
     )
     file(GLOB src_source
         "src/main.cpp"
         "src/StreamlineSample.cpp"
         "src/NGXWrapper.cpp"
         "src/NVWrapper.cpp"
+        "src/UnjitteredDepthMVPass.cpp"
     )
 endif()
     file(GLOB src_overrides 

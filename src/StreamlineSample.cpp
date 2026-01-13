@@ -96,9 +96,9 @@ StreamlineSample::StreamlineSample(
     m_RootFs->mount("/media", mediaPath);
     m_RootFs->mount("/shaders/donut", frameworkShaderPath);
     m_RootFs->mount("/native", nativeFS);
-#ifdef STREAMLINE_FEATURE_DLSS_RR
+#if defined(STREAMLINE_FEATURE_DLSS_RR) || defined(STREAMLINE_FEATURE_FGSR_SR)
     m_RootFs->mount("/shaders/app", appShaderPath);
-#endif // STREAMLINE_FEATURE_DLSS_RR
+#endif
     m_TextureCache = std::make_shared<TextureCache>(GetDevice(), m_RootFs, nullptr);
 
     m_ShaderFactory = std::make_shared<ShaderFactory>(GetDevice(), m_RootFs, "/shaders");
@@ -611,6 +611,11 @@ void StreamlineSample::CreateRenderPasses(bool& exposureResetRequired, float lod
     GBufferParams.stencilWriteMask = motionVectorStencilMask;
     m_GBufferPass = std::make_unique<GBufferFillPass>(GetDevice(), m_CommonPasses);
     m_GBufferPass->Init(*m_ShaderFactory, GBufferParams);
+
+    // Initialize UnjitteredDepthMVPass for FGSR
+    m_UnjitteredDepthMVPass = std::make_unique<UnjitteredDepthMVPass>(GetDevice(), m_CommonPasses);
+    UnjitteredDepthMVPass::CreateParameters unjitteredParams;
+    m_UnjitteredDepthMVPass->Init(*m_ShaderFactory, unjitteredParams);
 
     m_DeferredLightingPass = std::make_unique<DeferredLightingPass>(GetDevice(), m_CommonPasses);
     m_DeferredLightingPass->Init(m_ShaderFactory);
@@ -1261,6 +1266,33 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                 *m_GBufferPass,
                 gbufferContext,
                 "GBufferFill");
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // Unjittered Depth + MV Pass for FGSR (if enabled)
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseUnjitteredDepthMV)
+    {
+        // Get unjittered matrices from the view (includeOffset = false gives us the matrix without jitter)
+        const auto* planarView = m_View->GetChildView(ViewType::PLANAR, 0);
+        dm::float4x4 matWorldToClipNoOffset = planarView->GetViewProjectionMatrix(false);
+        dm::float4x4 matPrevWorldToClipNoOffset = m_ViewPrevious ?
+            m_ViewPrevious->GetChildView(ViewType::PLANAR, 0)->GetViewProjectionMatrix(false) :
+            matWorldToClipNoOffset;
+        dm::float2 viewportSize = dm::float2((float)m_RenderTargets->m_RenderSize.x, (float)m_RenderTargets->m_RenderSize.y);
+
+        m_UnjitteredDepthMVPass->SetUnjitteredMatrices(matWorldToClipNoOffset, matPrevWorldToClipNoOffset, viewportSize);
+
+        UnjitteredDepthMVPass::Context unjitteredContext;
+        RenderCompositeView(m_CommandList,
+                    m_View.get(), m_ViewPrevious.get(),
+                    *m_RenderTargets->UnjitteredDepthMVFramebuffer,
+                    m_Scene->GetSceneGraph()->GetRootNode(),
+                    *m_OpaqueDrawStrategy,
+                    *m_UnjitteredDepthMVPass,
+                    unjitteredContext,
+                    "UnjitteredDepthMV");
+    }
+#endif
+
 #ifdef STREAMLINE_FEATURE_DLSS_RR
     if(m_ui.RayTracing_Mode && GetDevice()->getGraphicsAPI() != nvrhi::GraphicsAPI::D3D11)
     {   
@@ -1372,10 +1404,22 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
 
     // TAG STREAMLINE RESOURCES
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // Use unjittered depth/MV when enabled for FGSR
+    nvrhi::ITexture* depthToTag = m_ui.FGSR_SR_UseUnjitteredDepthMV
+        ? m_RenderTargets->UnjitteredDepth
+        : m_RenderTargets->Depth;
+    nvrhi::ITexture* mvToTag = m_ui.FGSR_SR_UseUnjitteredDepthMV
+        ? m_RenderTargets->UnjitteredMV
+        : m_RenderTargets->MotionVectors;
+#else
+    nvrhi::ITexture* depthToTag = m_RenderTargets->Depth;
+    nvrhi::ITexture* mvToTag = m_RenderTargets->MotionVectors;
+#endif
     NVWrapper::Get().TagResources_General(m_CommandList,
         m_View->GetChildView(ViewType::PLANAR, 0),
-        m_RenderTargets->MotionVectors,
-        m_RenderTargets->Depth,
+        mvToTag,
+        depthToTag,
         m_RenderTargets->PreUIColor);
 
 #ifdef STREAMLINE_FEATURE_DLSS_RR
