@@ -484,6 +484,9 @@ protected:
 
                 if (m_ui.Global_UseJitter)
                 {
+                    // Jitter Mode (from TAA Camera Jitter)
+                    ImGui::Combo("Jitter Mode", (int*)&m_ui.TemporalAntiAliasingJitter, "MSAA\0Halton\0R2\0White Noise\0");
+
                     ImGui::Checkbox("Test Jitter", &m_ui.Global_TestJitter);
                     if (m_ui.Global_TestJitter)
                     {
@@ -498,6 +501,11 @@ protected:
                 }
                 ImGui::Unindent();
             }
+
+            // Debug: Show full input buffer
+            ImGui::Checkbox("Show Full Input Buffer", &m_ui.DLSS_DebugShowFullRenderingBuffer);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Debug: Show full rendering buffer before upscaling");
 
             // Global Unjittered Pass (DLSS/FGSR 通用)
             ImGui::Checkbox("Use Unjittered Depth/MV Pass", &m_ui.Global_UseUnjitteredPass);
@@ -590,9 +598,9 @@ protected:
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
-                    "Normal\0Color\0MV\0Depth\0");
+                    "Normal\0Color\0MV\0Depth\0SimpleBlend\0NoClamp\0NoDepthChk\0");
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV(scale=100), 3=Depth(pow(d,0.1))");
+                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV, 3=Depth\n4=SimpleBlend(uv+固定权重)\n5=NoClamp(跳过AABB clamp)\n6=NoDepthChk(跳过depth检查)");
             }
 
             // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)

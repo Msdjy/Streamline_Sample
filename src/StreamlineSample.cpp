@@ -1544,7 +1544,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     //
     // DO FGSR_SR (super-resolution: renderSize → displaySize)
     //
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff) {
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
 
         // Blit PreUIColor (displaySize, LDR) → FGSR_SRInput (renderSize, LDR)
         engine::BlitParameters blitParams{};
@@ -1579,7 +1579,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
         fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
         fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;  // Jitter Fix: Color 上采样前修复
-        fgsr_sr_consts.doJitterFixBeforeBlend = 0;  // 保留字段 (已废弃)
 
         // Blend 选项
         fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
@@ -1607,6 +1606,14 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
         NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
         m_PreviousViewsValid = true;
+    }
+    else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.DLSS_DebugShowFullRenderingBuffer) {
+        // Debug: Show full input buffer - blit HdrColor (renderSize) to PreUIColor (displaySize)
+        engine::BlitParameters blitParams{};
+        blitParams.targetFramebuffer = m_RenderTargets->PreUIFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
+        blitParams.sourceTexture = m_RenderTargets->HdrColor;
+        m_CommonPasses->BlitTexture(m_CommandList, blitParams, &m_BindingCache);
+        m_PreviousViewsValid = false;
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
 
