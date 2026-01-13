@@ -196,6 +196,20 @@ public:
     sl::NISMode                         NIS_Mode = sl::NISMode::eOff;
     float                               NIS_Sharpness = 0.5f;
 
+    // ========================================
+    // Global Jitter Override (独立，可覆盖默认行为)
+    // ========================================
+    bool   Global_Jitter_Override = true;     // 是否覆盖默认 jitter 行为
+    bool   Global_UseJitter = true;           // 覆盖时：是否使用 jitter
+    bool   Global_TestJitter = false;         // 覆盖时：使用测试 jitter
+    float  Global_TestJitterX = 0.25f;
+    float  Global_TestJitterY = 0.25f;
+
+    // ========================================
+    // Global Unjittered Pass (DLSS/FGSR 通用)
+    // ========================================
+    bool   Global_UseUnjitteredPass = true;   // 使用单独的 unjittered pass 生成 depth/MV
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     // FGSR_SR specific parameters
     bool                                FGSR_SR_Supported = false;
@@ -203,25 +217,23 @@ public:
     // 主模式: 0=Off, 1=FirstFrameUpsampleBlend, 2=EveryFrameUpsampleBlend
     sl::FGSR_SRMode                     FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
 
-    // 通用选项 (所有非 Off 模式都有)
-    bool                                FGSR_SR_UseTRT = false;       // 是否使用 TRT 上采样
+    // 通用选项
+    bool                                FGSR_SR_UseTRT = true;        // 是否使用 TRT 上采样
     int                                 FGSR_SR_TRTBackend = 0;       // TRT 后端: 0=CS, 1=CUDA
     int                                 FGSR_SR_ScaleFactor = 2;      // 放大倍率: 1=1x, 2=2x, 4=4x
-    bool                                FGSR_SR_UseJitter = true;     // 渲染时使用 TAA jitter
-    bool                                FGSR_SR_TestJitter = false;   // 使用测试抖动值
-    float                               FGSR_SR_TestJitterX = 0.25f;
-    float                               FGSR_SR_TestJitterY = 0.25f;
+
+    // Blend 选项
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
-    bool                                FGSR_SR_UseHistoryDepthJitterFix = true;  // 用 prevJitterOffset 修复 historyDepth 采样
-    bool                                FGSR_SR_UseColorJitterFix = false;  // 在 blend 内部做 color jitter 修复
-    bool                                FGSR_SR_UseUnjitteredDepthMV = false;  // 使用单独的 unjittered pass 生成 depth/MV
     int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
+
+    // Jitter Fix 选项
+    bool                                FGSR_SR_UseDepthMVJitterFix = false;      // Depth/MV Jitter 修复 (当前帧+历史帧)
+    bool                                FGSR_SR_DoJitterFixBeforeUp = false;      // Color 上采样前修复 (JitterResample)
+    bool                                FGSR_SR_UseColorJitterFix = true;         // Color 在 Blend 内部修复
 
     // EveryFrameUpsampleBlend 模式的步骤开关
     bool                                FGSR_SR_DoUpsample = true;
     bool                                FGSR_SR_DoBlend = true;
-    bool                                FGSR_SR_DoJitterFixBeforeUp = false;
-    bool                                FGSR_SR_DoJitterFixBeforeBlend = false;
 
     // 计算出的上采样模式 (供内部使用)
     sl::FGSR_UpsampleMode               FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;

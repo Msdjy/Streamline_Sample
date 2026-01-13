@@ -498,37 +498,41 @@ bool StreamlineSample::SetupView()
     // 判断是否需要 jitter
     float2 pixelOffset = float2(0.f);
 
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-    // FGSR 模式：UseJitter 开关控制 jitter
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
+    // ========================================
+    // Global Jitter Override - 优先级最高，可用于 DLSS/TAA/FGSR
+    // ========================================
+    if (m_ui.Global_Jitter_Override)
     {
-        if (m_ui.FGSR_SR_UseJitter)
+        if (m_ui.Global_UseJitter)
         {
-            if (m_ui.FGSR_SR_TestJitter)
+            if (m_ui.Global_TestJitter)
             {
                 // 测试模式：固定偏移 + 每帧抖动
-                static int debugFrameCount = 0;
-                debugFrameCount++;
-                float sign = (debugFrameCount % 2 == 0) ? 1.0f : -1.0f;
-                float shakeX = m_ui.FGSR_SR_TestJitterX * sign;
-                float shakeY = m_ui.FGSR_SR_TestJitterY * sign;
+                static int globalDebugFrameCount = 0;
+                globalDebugFrameCount++;
+                float sign = (globalDebugFrameCount % 2 == 0) ? 1.0f : -1.0f;
+                float shakeX = m_ui.Global_TestJitterX * sign;
+                float shakeY = m_ui.Global_TestJitterY * sign;
                 float testOffsetX = 0.2f * m_RenderingRectSize.x + shakeX;  // 固定偏移20% + 抖动
                 float testOffsetY = 0.1f * m_RenderingRectSize.y + shakeY;  // 固定偏移10% + 抖动
                 pixelOffset = float2(testOffsetX, testOffsetY);
             }
             else
             {
-                // 普通模式：使用 TAA jitter
+                // 使用 TAA jitter
                 pixelOffset = m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
             }
         }
-        // else: UseJitter 关闭时，pixelOffset 保持 0，无任何 jitter
+        // else: Global_UseJitter 关闭时，pixelOffset 保持 0
     }
     else
-#endif
     {
-        // 非 FGSR 模式：使用默认 TAA jitter
+        // 默认：根据 AA 模式决定是否使用 TAA jitter
         bool needJitter = (m_ui.AAMode != AntiAliasingMode::NONE);
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+        // FGSR 模式也需要 jitter
+        needJitter |= (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff);
+#endif
         pixelOffset = needJitter && m_TemporalAntiAliasingPass ? m_TemporalAntiAliasingPass->GetCurrentPixelOffset() : float2(0.f);
     }
 
@@ -1267,9 +1271,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                 gbufferContext,
                 "GBufferFill");
 
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-    // Unjittered Depth + MV Pass for FGSR (if enabled)
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseUnjitteredDepthMV)
+    // Unjittered Depth + MV Pass (Global, works with DLSS/FGSR)
+    if (m_ui.Global_UseUnjitteredPass)
     {
         // Get unjittered matrices from the view (includeOffset = false gives us the matrix without jitter)
         const auto* planarView = m_View->GetChildView(ViewType::PLANAR, 0);
@@ -1291,7 +1294,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                     unjitteredContext,
                     "UnjitteredDepthMV");
     }
-#endif
 
 #ifdef STREAMLINE_FEATURE_DLSS_RR
     if(m_ui.RayTracing_Mode && GetDevice()->getGraphicsAPI() != nvrhi::GraphicsAPI::D3D11)
@@ -1404,18 +1406,13 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
 
     // TAG STREAMLINE RESOURCES
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-    // Use unjittered depth/MV when enabled for FGSR
-    nvrhi::ITexture* depthToTag = m_ui.FGSR_SR_UseUnjitteredDepthMV
+    // Use unjittered depth/MV when Global_UseUnjitteredPass is enabled
+    nvrhi::ITexture* depthToTag = m_ui.Global_UseUnjitteredPass
         ? m_RenderTargets->UnjitteredDepth
         : m_RenderTargets->Depth;
-    nvrhi::ITexture* mvToTag = m_ui.FGSR_SR_UseUnjitteredDepthMV
+    nvrhi::ITexture* mvToTag = m_ui.Global_UseUnjitteredPass
         ? m_RenderTargets->UnjitteredMV
         : m_RenderTargets->MotionVectors;
-#else
-    nvrhi::ITexture* depthToTag = m_RenderTargets->Depth;
-    nvrhi::ITexture* mvToTag = m_RenderTargets->MotionVectors;
-#endif
     NVWrapper::Get().TagResources_General(m_CommandList,
         m_View->GetChildView(ViewType::PLANAR, 0),
         mvToTag,
@@ -1581,14 +1578,16 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         // EveryFrameUpsampleBlend 模式的步骤开关
         fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
         fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
-        fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
-        fgsr_sr_consts.doJitterFixBeforeBlend = m_ui.FGSR_SR_DoJitterFixBeforeBlend ? 1 : 0;
+        fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;  // Jitter Fix: Color 上采样前修复
+        fgsr_sr_consts.doJitterFixBeforeBlend = 0;  // 保留字段 (已废弃)
 
-        // Debug 选项
+        // Blend 选项
         fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
-        fgsr_sr_consts.useHistoryDepthJitterFix = m_ui.FGSR_SR_UseHistoryDepthJitterFix ? 1 : 0;
-        fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
         fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+
+        // Jitter Fix 选项
+        fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;  // Depth/MV Jitter 修复
+        fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;  // Color 在 Blend 内部修复
 
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 

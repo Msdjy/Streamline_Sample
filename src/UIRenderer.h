@@ -466,11 +466,50 @@ protected:
 
             if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;
 
+            //
+            //  Global Jitter Override
+            //
+
+            ImGui::Separator();
+            ImGui::Text("Global Jitter Override");
+            ImGui::SameLine();
+            ImGui::Checkbox("##GlobalJitterOverride", &m_ui.Global_Jitter_Override);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Override jitter settings for all features (DLSS/TAA/FGSR)");
+
+            if (m_ui.Global_Jitter_Override)
+            {
+                ImGui::Indent();
+                ImGui::Checkbox("Use Jitter", &m_ui.Global_UseJitter);
+
+                if (m_ui.Global_UseJitter)
+                {
+                    ImGui::Checkbox("Test Jitter", &m_ui.Global_TestJitter);
+                    if (m_ui.Global_TestJitter)
+                    {
+                        ImGui::Text("Jitter X/Y");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60);
+                        ImGui::InputFloat("##GlobalJitterX", &m_ui.Global_TestJitterX, 0.0f, 0.0f, "%.2f");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(60);
+                        ImGui::InputFloat("##GlobalJitterY", &m_ui.Global_TestJitterY, 0.0f, 0.0f, "%.2f");
+                    }
+                }
+                ImGui::Unindent();
+            }
+
+            // Global Unjittered Pass (DLSS/FGSR 通用)
+            ImGui::Checkbox("Use Unjittered Depth/MV Pass", &m_ui.Global_UseUnjitteredPass);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Render separate unjittered pass for Depth and MV\n(works with DLSS and FGSR)");
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
             //
             //  FGSR_SR
             //
 
+            ImGui::Separator();
             ImGui::Text("FGSR Super Resolution");
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
@@ -521,65 +560,39 @@ protected:
                     ImGui::Checkbox("Blend", &m_ui.FGSR_SR_DoBlend);
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("Execute temporal blend step");
-
-                    ImGui::Checkbox("JitterFix Before Up", &m_ui.FGSR_SR_DoJitterFixBeforeUp);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Apply jitter fix before upsampling (low-res)");
-
-                    ImGui::SameLine();
-                    ImGui::Checkbox("JitterFix Before Blend", &m_ui.FGSR_SR_DoJitterFixBeforeBlend);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Apply jitter fix before blending (high-res)");
                 }
 
-                // ========== Jitter 选项 ==========
-                ImGui::Separator();
-                ImGui::Text("Jitter Options");
-
-                ImGui::Checkbox("Use Jitter", &m_ui.FGSR_SR_UseJitter);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("ON: Use TAA jitter for rendering\nOFF: No jitter");
-
-                if (m_ui.FGSR_SR_UseJitter)
-                {
-                    ImGui::Checkbox("Test Jitter", &m_ui.FGSR_SR_TestJitter);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("ON: Fixed offset + per-frame shake for testing\nOFF: Normal TAA jitter");
-
-                    if (m_ui.FGSR_SR_TestJitter)
-                    {
-                        ImGui::Text("Shake X/Y");
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(60);
-                        ImGui::InputFloat("##ShakeX", &m_ui.FGSR_SR_TestJitterX, 0.0f, 0.0f, "%.2f");
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(60);
-                        ImGui::InputFloat("##ShakeY", &m_ui.FGSR_SR_TestJitterY, 0.0f, 0.0f, "%.2f");
-                    }
-                }
-
-                // ========== Debug 选项 ==========
+                // ========== Blend 选项 ==========
                 ImGui::Separator();
                 ImGui::Checkbox("New Blend Logic", &m_ui.FGSR_SR_UseNewBlendLogic);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Enable new blend shader logic (adapts to high-res input)");
 
-                ImGui::Checkbox("History Depth Jitter Fix", &m_ui.FGSR_SR_UseHistoryDepthJitterFix);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Fix historyDepth sampling using prevJitterOffset (reduces edge flickering)");
+                // ========== Jitter Fix 选项 ==========
+                ImGui::Separator();
+                ImGui::Text("Jitter Fix");
 
-                ImGui::Checkbox("Color Jitter Fix (in Blend)", &m_ui.FGSR_SR_UseColorJitterFix);
+                ImGui::Checkbox("Depth/MV Jitter Fix", &m_ui.FGSR_SR_UseDepthMVJitterFix);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Do color jitter fix inside blend shader (instead of separate JitterResample pass)");
+                    ImGui::SetTooltip("Fix Depth/MV sampling jitter:\n- Current MV/Depth: use jitteredUV\n- History Depth: use prevJitterOffset");
 
-                ImGui::Checkbox("Use Unjittered Depth/MV Pass", &m_ui.FGSR_SR_UseUnjitteredDepthMV);
+                ImGui::Checkbox("Color Before Upsample", &m_ui.FGSR_SR_DoJitterFixBeforeUp);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Render separate unjittered pass for Depth and MV\n(avoids jitter correction in plugin, renders scene twice)");
+                    ImGui::SetTooltip("Apply JitterResample pass before upsampling (low-res)");
 
+                ImGui::SameLine();
+                ImGui::Checkbox("Color In Blend", &m_ui.FGSR_SR_UseColorJitterFix);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Do color jitter fix inside blend shader");
+
+                // ========== Debug 选项 ==========
+                ImGui::Separator();
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
-                    "Normal\0Color\0MV\0Depth\0HistoryColor\0HistDepth(Fix)\0HistDepth(Raw)\0DepthDiff\0Jitter\0ColorDiff\0ColorDiffLuma\0BlendState\0DepthEdge\0Weight\0");
+                    "Normal\0Color\0MV\0Depth\0");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV(scale=100), 3=Depth(pow(d,0.1))");
             }
 
             // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)
