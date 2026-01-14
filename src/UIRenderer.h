@@ -517,6 +517,22 @@ protected:
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("HDR: upscale before ToneMap (default)\nLDR: 540p ToneMap then upscale");
 
+            // DLSS Flag Override
+            ImGui::Separator();
+            ImGui::Text("DLSS Flag Override");
+            const char* dlssOverrideOptions[] = { "Auto", "Force Off", "Force On" };
+            int dlssOverrideIsHDR = m_ui.DLSS_OverrideIsHDR + 1;  // -1,0,1 -> 0,1,2
+            if (ImGui::Combo("IsHDR##DLSSOverride", &dlssOverrideIsHDR, dlssOverrideOptions, 3))
+                m_ui.DLSS_OverrideIsHDR = dlssOverrideIsHDR - 1;  // 0,1,2 -> -1,0,1
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Override DLSS IsHDR flag\nAuto: use colorBuffersHDR setting");
+
+            int dlssOverrideMVJittered = m_ui.DLSS_OverrideMVJittered + 1;
+            if (ImGui::Combo("MVJittered##DLSSOverride", &dlssOverrideMVJittered, dlssOverrideOptions, 3))
+                m_ui.DLSS_OverrideMVJittered = dlssOverrideMVJittered - 1;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Override DLSS MVJittered flag\nAuto: use commonConsts->motionVectorsJittered");
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
             //
             //  FGSR_SR

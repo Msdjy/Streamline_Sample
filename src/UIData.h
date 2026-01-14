@@ -158,6 +158,11 @@ public:
     AntiAliasingMode                    DLSS_Last_AA = AntiAliasingMode::NONE;
     bool                                DLSS_DebugShowFullRenderingBuffer = false;
     bool                                DLSS_lodbias_useoveride = false;
+
+    // DLSS Flag Override (优先于自动检测)
+    // -1=使用自动检测, 0=强制关闭, 1=强制开启
+    int                                 DLSS_OverrideIsHDR = -1;       // Override IsHDR flag
+    int                                 DLSS_OverrideMVJittered = -1;  // Override MVJittered flag
     float                               DLSS_lodbias_overide = 0.f;
     bool                                DLSS_always_use_extents = false;
     sl::DLSSPreset                      DLSS_presets[static_cast<int>(sl::DLSSMode::eCount)] = {};

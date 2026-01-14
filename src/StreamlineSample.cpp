@@ -1020,6 +1020,13 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         dlssConstants.colorBuffersHDR = m_ui.Global_UseHDRInput ? sl::Boolean::eTrue : sl::Boolean::eFalse;
         dlssConstants.sharpness = m_RecommendedDLSSSettings.sharpness;
 
+        // Override flags (优先于自动检测)
+        // -1=使用自动检测(eInvalid), 0=强制关闭(eFalse), 1=强制开启(eTrue)
+        dlssConstants.overrideIsHDR = (m_ui.DLSS_OverrideIsHDR == -1) ? sl::Boolean::eInvalid
+            : (m_ui.DLSS_OverrideIsHDR == 1) ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+        dlssConstants.overrideMVJittered = (m_ui.DLSS_OverrideMVJittered == -1) ? sl::Boolean::eInvalid
+            : (m_ui.DLSS_OverrideMVJittered == 1) ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+
         if (m_ui.DLSSPresetsAnyNonDefault())
         {
             dlssConstants.dlaaPreset = m_ui.DLSS_presets[static_cast<int>(sl::DLSSMode::eDLAA)];
