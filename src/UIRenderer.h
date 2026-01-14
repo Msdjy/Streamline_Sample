@@ -554,6 +554,27 @@ protected:
                     m_ui.FGSR_SR_ScaleFactor = (scaleIndex == 2) ? 4 : (scaleIndex == 1) ? 2 : 1;
                 }
 
+                // 2x 模型选择 (仅当 ScaleFactor=2 时显示)
+                if (m_ui.FGSR_SR_ScaleFactor == 2)
+                {
+                    ImGui::Checkbox("Use Our 2x Model", &m_ui.FGSR_SR_UseOur2xModel);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("false=Original (quicksrnet_small_2x)\ntrue=Ours (quick_srnet_small)");
+                }
+
+                // ========== DLSS对齐选项 ==========
+                ImGui::Separator();
+                ImGui::Text("DLSS Alignment");
+
+                ImGui::Checkbox("Use LOD Bias", &m_ui.FGSR_SR_UseLodBias);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Use same LOD bias as DLSS for texture sampling");
+
+                ImGui::SameLine();
+                ImGui::Checkbox("HDR Input", &m_ui.FGSR_SR_UseHDRInput);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Use HDR color input (like DLSS). Disable for old LDR mode.");
+
                 // ========== EveryFrameUpsampleBlend 模式的步骤开关 ==========
                 if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eEveryFrameUpsampleBlend)
                 {

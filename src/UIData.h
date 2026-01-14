@@ -222,6 +222,10 @@ public:
     int                                 FGSR_SR_TRTBackend = 0;       // TRT 后端: 0=CS, 1=CUDA
     int                                 FGSR_SR_ScaleFactor = 2;      // 放大倍率: 1=1x, 2=2x, 4=4x
 
+    // DLSS对齐选项
+    bool                                FGSR_SR_UseLodBias = true;    // 使用和DLSS一样的LOD Bias
+    bool                                FGSR_SR_UseHDRInput = true;   // 使用HDR输入(对齐DLSS), false=用老的LDR输入
+
     // Blend 选项
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
     int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
@@ -234,6 +238,9 @@ public:
     // EveryFrameUpsampleBlend 模式的步骤开关
     bool                                FGSR_SR_DoUpsample = true;
     bool                                FGSR_SR_DoBlend = true;
+
+    // 2x 模型选择
+    bool                                FGSR_SR_UseOur2xModel = false;  // false=原版, true=我们的
 
     // 计算出的上采样模式 (供内部使用)
     sl::FGSR_UpsampleMode               FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;

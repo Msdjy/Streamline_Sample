@@ -1117,7 +1117,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // If FGSR_SR is enabled, set render size accordingly
+    // If FGSR_SR is enabled, set render size and optionally LOD bias
     if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
     {
         int scaleFactor = m_ui.FGSR_SR_ScaleFactor;
@@ -1125,6 +1125,12 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         {
             m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
                                     m_DisplaySize.y / scaleFactor };
+            // LOD Bias 开关：和 DLSS 一样设置 LOD Bias，确保纹理采样的 mipmap 级别一致
+            if (m_ui.FGSR_SR_UseLodBias)
+            {
+                float texLodXDimension = (float)m_RenderingRectSize.x;
+                lodBias = std::log2f(texLodXDimension / m_DisplaySize.x) - 1;
+            }
         }
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
@@ -1465,9 +1471,78 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
     else
     {
-        // FGSR will be done after tonemap
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+        // DO FGSR_SR (super-resolution: renderSize → displaySize)
+        // HDR 模式：和 DLSS 一样的位置，ToneMapping 之前，输入 HdrColor(HDR)
+        if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
+
+            // FGSR_SR SETUP
+            auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+
+            // 主模式
+            fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+            fgsr_sr_consts.upsampleMode = m_ui.FGSR_SR_UpsampleMode;
+            fgsr_sr_consts.scaleFactor = (uint32_t)m_ui.FGSR_SR_ScaleFactor;
+
+            // 分辨率
+            fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
+            fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+
+            // Camera matrix
+            dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+            dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
+            dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
+            fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
+
+            // Thresholds
+            fgsr_sr_consts.distance_diff_threshold = 100.f;
+            fgsr_sr_consts.depth_diff_threshold = 0.003f;
+            fgsr_sr_consts.maxFlowWeight = 0.01f;
+
+            // EveryFrameUpsampleBlend 模式的步骤开关
+            fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
+            fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
+            fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
+
+            // Blend 选项
+            fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
+            fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+
+            // Jitter Fix 选项
+            fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;
+            fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
+
+            // 2x 模型选择
+            fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
+
+            NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+            // Prepare resources state
+            auto HdrColorDesc = m_RenderTargets->HdrColor->getDesc();
+            auto AAResolvedColorDesc = m_RenderTargets->AAResolvedColor->getDesc();
+            m_CommandList->setTextureState(m_RenderTargets->HdrColor, nvrhi::AllSubresources, HdrColorDesc.initialState);
+            m_CommandList->setTextureState(m_RenderTargets->AAResolvedColor, nvrhi::AllSubresources, AAResolvedColorDesc.initialState);
+            m_CommandList->commitBarriers();
+
+            // TAG STREAMLINE RESOURCES - 和 DLSS 一样：input HdrColor (renderSize), output AAResolvedColor (displaySize)
+            NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
+                m_View->GetChildView(ViewType::PLANAR, 0),
+                m_RenderTargets->HdrColor,        // 输入 (renderSize, HDR) - 和 DLSS 一样
+                m_RenderTargets->AAResolvedColor); // 输出 (displaySize, HDR) - 和 DLSS 一样
+
+            NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+            m_PreviousViewsValid = true;
+        }
+        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.DLSS_DebugShowFullRenderingBuffer) {
+            // Debug: Show full input buffer
+            m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
+            m_PreviousViewsValid = false;
+        }
+        else
+#endif // STREAMLINE_FEATURE_FGSR_SR
         {
-            // IF YOU DO NOTHING SPECIAL -> FORWARD TEXTURE
+            // IF YOU DO NOTHING SPECIAL (or FGSR LDR mode) -> FORWARD TEXTURE
+            // LDR 模式会在 tonemap 之后调用 FGSR
             m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
             m_PreviousViewsValid = false;
         }
@@ -1542,10 +1617,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     //
-    // DO FGSR_SR (super-resolution: renderSize → displaySize)
+    // DO FGSR_SR LDR 模式 (同尺寸处理: displaySize → displaySize)
+    // ToneMapping 之后，输入 PreUIColor (LDR)
     //
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
-
+    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.FGSR_SR_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
         // Blit PreUIColor (displaySize, LDR) → FGSR_SRInput (renderSize, LDR)
         engine::BlitParameters blitParams{};
         blitParams.targetFramebuffer = m_RenderTargets->FGSR_SRInputFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
@@ -1588,6 +1663,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;  // Depth/MV Jitter 修复
         fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;  // Color 在 Blend 内部修复
 
+        // 2x 模型选择
+        fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
+
         NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
         // Prepare resources state
@@ -1607,12 +1685,19 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
         m_PreviousViewsValid = true;
     }
-    else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.DLSS_DebugShowFullRenderingBuffer) {
-        // Debug: Show full input buffer - blit HdrColor (renderSize) to PreUIColor (displaySize)
-        engine::BlitParameters blitParams{};
-        blitParams.targetFramebuffer = m_RenderTargets->PreUIFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
-        blitParams.sourceTexture = m_RenderTargets->HdrColor;
-        m_CommonPasses->BlitTexture(m_CommandList, blitParams, &m_BindingCache);
+    else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.FGSR_SR_UseHDRInput && m_ui.DLSS_DebugShowFullRenderingBuffer) {
+        // Debug LDR: 先生成 540p 输入，再显示
+        // Step 1: Blit PreUIColor (1080p) → FGSR_SRInput (540p)
+        engine::BlitParameters blitDown{};
+        blitDown.targetFramebuffer = m_RenderTargets->FGSR_SRInputFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
+        blitDown.sourceTexture = m_RenderTargets->PreUIColor;
+        m_CommonPasses->BlitTexture(m_CommandList, blitDown, &m_BindingCache);
+
+        // Step 2: Blit FGSR_SRInput (540p) → PreUIColor (1080p) 显示原始输入
+        engine::BlitParameters blitUp{};
+        blitUp.targetFramebuffer = m_RenderTargets->PreUIFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
+        blitUp.sourceTexture = m_RenderTargets->FGSR_SRInput;
+        m_CommonPasses->BlitTexture(m_CommandList, blitUp, &m_BindingCache);
         m_PreviousViewsValid = false;
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
