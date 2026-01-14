@@ -1017,7 +1017,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         dlssConstants.mode = m_ui.DLSS_Mode;
         dlssConstants.outputWidth = m_DisplaySize.x;
         dlssConstants.outputHeight = m_DisplaySize.y;
-        dlssConstants.colorBuffersHDR = sl::Boolean::eTrue;
+        dlssConstants.colorBuffersHDR = m_ui.Global_UseHDRInput ? sl::Boolean::eTrue : sl::Boolean::eFalse;
         dlssConstants.sharpness = m_RecommendedDLSSSettings.sharpness;
 
         if (m_ui.DLSSPresetsAnyNonDefault())
@@ -1458,14 +1458,37 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
-    
+
     // ANTI-ALIASING
+
+    // DLSS LDR 模式：先做 540p ToneMapping
+    nvrhi::ITexture* dlssInput = m_RenderTargets->HdrColor;  // 默认 HDR 输入
+    if (m_ui.AAMode == AntiAliasingMode::DLSS && !m_ui.Global_UseHDRInput)
+    {
+        // LDR 模式：先做 540p ToneMapping
+        auto texDesc = m_RenderTargets->RenderLdrLinear->getDesc();
+        bool sizeMatch = (texDesc.width == (uint32_t)m_RenderingRectSize.x && texDesc.height == (uint32_t)m_RenderingRectSize.y);
+
+        if (!m_ToneMappingPassRender || !sizeMatch) {
+            std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->SetViewport(
+                nvrhi::Viewport((float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y));
+            std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->UpdateCache();
+
+            ToneMappingPass::CreateParameters params;
+            params.exposureBufferOverride = m_ToneMappingPass->GetExposureBuffer();
+            m_ToneMappingPassRender = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses,
+                m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
+        }
+        auto toneMappingParams = m_ui.ToneMappingParams;
+        m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
+        dlssInput = m_RenderTargets->RenderLdrLinear;  // LDR 输入
+    }
 
     // TAG STREAMLINE RESOURCES
     NVWrapper::Get().TagResources_DLSS_NIS(m_CommandList,
         m_View->GetChildView(ViewType::PLANAR, 0),
         m_RenderTargets->AAResolvedColor,
-        m_RenderTargets->HdrColor);
+        dlssInput);  // 根据模式选择 HDR 或 LDR 输入
 
     if (m_ui.AAMode != AntiAliasingMode::NONE) {
 
@@ -1477,7 +1500,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         }
 
         if (m_ui.AAMode == AntiAliasingMode::DLSS && m_ui.DLSS_DebugShowFullRenderingBuffer) {
-            m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
+            m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), dlssInput, &m_BindingCache);
             m_PreviousViewsValid = false;
         }
 
@@ -1688,14 +1711,16 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     //DO TONEMAPPING
     nvrhi::ITexture* texToDisplay;
 
+    // LDR 模式判断：DLSS 或 FGSR 使用 LDR 输入时，540p 已经做过 ToneMapping，只需要 gamma 校正
+    bool isDLSS_LDR_Mode = (m_ui.AAMode == AntiAliasingMode::DLSS && !m_ui.Global_UseHDRInput);
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // FGSR LDR 模式：540p 已经做过 ToneMapping，只需要 gamma 校正
     bool isFGSR_LDR_Mode = (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.Global_UseHDRInput);
 #else
     bool isFGSR_LDR_Mode = false;
 #endif
+    bool isLDR_Mode = isDLSS_LDR_Mode || isFGSR_LDR_Mode;
 
-    if (isFGSR_LDR_Mode)
+    if (isLDR_Mode)
     {
         // LDR 模式：AAResolvedColor 是 linear LDR，blit 到 LdrColor 做 gamma 校正
         // LdrColor 是 SRGBA8_UNORM，写入时自动 linear→sRGB
