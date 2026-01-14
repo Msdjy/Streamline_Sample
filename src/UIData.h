@@ -210,6 +210,11 @@ public:
     // ========================================
     bool   Global_UseUnjitteredPass = true;   // 使用单独的 unjittered pass 生成 depth/MV
 
+    // ========================================
+    // Global HDR/LDR Input Mode (DLSS/FGSR 通用)
+    // ========================================
+    bool   Global_UseHDRInput = true;         // true=HDR输入(默认), false=LDR输入(先540p ToneMap再上采样)
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     // FGSR_SR specific parameters
     bool                                FGSR_SR_Supported = false;
@@ -224,7 +229,7 @@ public:
 
     // DLSS对齐选项
     bool                                FGSR_SR_UseLodBias = true;    // 使用和DLSS一样的LOD Bias
-    bool                                FGSR_SR_UseHDRInput = true;   // 使用HDR输入(对齐DLSS), false=用老的LDR输入
+    // UseHDRInput 已移到 Global_UseHDRInput
 
     // Blend 选项
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关

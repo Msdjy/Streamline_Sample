@@ -187,6 +187,7 @@ private:
     std::unique_ptr<TemporalAntiAliasingPass>       m_TemporalAntiAliasingPass;
     std::unique_ptr<BloomPass>                      m_BloomPass;
     std::unique_ptr<ToneMappingPass>                m_ToneMappingPass;
+    std::unique_ptr<ToneMappingPass>                m_ToneMappingPassRender; // 540p tonemap for LDR input
     std::unique_ptr<SsaoPass>                       m_SsaoPass;
     std::shared_ptr<TransparentDrawStrategy>        m_TransparentDrawStrategy;
 
@@ -198,6 +199,7 @@ private:
     bool                                            m_PreviousViewsValid = false;
     std::shared_ptr<IView>                          m_ViewPrevious;
     std::shared_ptr<IView>                          m_TonemappingView;
+    std::shared_ptr<IView>                          m_RenderTonemappingView; // 540p view for LDR ToneMapping (no jitter)
 
     // Camera
     FirstPersonCamera                               m_FirstPersonCamera;

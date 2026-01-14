@@ -568,7 +568,7 @@ bool StreamlineSample::SetupView()
         }
     }
 
-    // ToneMappingView
+    // ToneMappingView (display size - 1080p)
     {
         std::shared_ptr<PlanarView> tonemappingPlanarView = std::dynamic_pointer_cast<PlanarView, IView>(m_TonemappingView);
 
@@ -583,6 +583,24 @@ bool StreamlineSample::SetupView()
         tonemappingPlanarView->SetViewport(nvrhi::Viewport((float)m_DisplaySize.x, (float)m_DisplaySize.y));
         tonemappingPlanarView->SetMatrices(viewMatrix, projection);
         tonemappingPlanarView->UpdateCache();
+    }
+
+    // RenderTonemappingView (render size - 540p) for LDR ToneMapping - 不带 jitter
+    {
+        std::shared_ptr<PlanarView> renderTonemappingPlanarView = std::dynamic_pointer_cast<PlanarView, IView>(m_RenderTonemappingView);
+
+        if (!renderTonemappingPlanarView)
+        {
+            m_RenderTonemappingView = renderTonemappingPlanarView = std::make_shared<PlanarView>();
+            topologyChanged = true;
+        }
+
+        float4x4 projection = perspProjD3DStyleReverse(verticalFov, float(m_RenderingRectSize.x) / m_RenderingRectSize.y, zNear);
+
+        renderTonemappingPlanarView->SetViewport(nvrhi::Viewport((float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y));
+        // 不设置 pixel offset，ToneMapping 不需要 jitter
+        renderTonemappingPlanarView->SetMatrices(viewMatrix, projection);
+        renderTonemappingPlanarView->UpdateCache();
     }
 
     return topologyChanged;
@@ -652,6 +670,8 @@ void StreamlineSample::CreateRenderPasses(bool& exposureResetRequired, float lod
     ToneMappingPass::CreateParameters toneMappingParams;
     toneMappingParams.exposureBufferOverride = exposureBuffer;
     m_ToneMappingPass = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses, m_RenderTargets->LdrFramebuffer, *m_TonemappingView, toneMappingParams);
+
+    // m_ToneMappingPassRender 在 RenderScene 中懒加载创建（LDR 模式首次使用时）
 
     m_PreviousViewsValid = false;
 }
@@ -1474,7 +1494,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 #ifdef STREAMLINE_FEATURE_FGSR_SR
         // DO FGSR_SR (super-resolution: renderSize → displaySize)
         // HDR 模式：和 DLSS 一样的位置，ToneMapping 之前，输入 HdrColor(HDR)
-        if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.FGSR_SR_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
+        if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.Global_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
 
             // FGSR_SR SETUP
             auto fgsr_sr_consts = sl::FGSR_SRConstants{};
@@ -1533,16 +1553,116 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
             m_PreviousViewsValid = true;
         }
-        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.DLSS_DebugShowFullRenderingBuffer) {
-            // Debug: Show full input buffer
+        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.Global_UseHDRInput && m_ui.DLSS_DebugShowFullRenderingBuffer) {
+            // Debug HDR: Show full HDR input buffer (HdrColor at 540p)
             m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
             m_PreviousViewsValid = false;
+        }
+        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.Global_UseHDRInput && m_ui.DLSS_DebugShowFullRenderingBuffer) {
+            // Debug LDR: Do 540p ToneMapping, then show the LDR input (RenderLdrLinear at 540p)
+            // 检查纹理尺寸是否与 m_RenderingRectSize 一致
+            auto texDesc = m_RenderTargets->RenderLdrLinear->getDesc();
+            bool sizeMatch = (texDesc.width == (uint32_t)m_RenderingRectSize.x && texDesc.height == (uint32_t)m_RenderingRectSize.y);
+
+            // 懒加载创建 540p ToneMappingPass，或尺寸不匹配时重建
+            if (!m_ToneMappingPassRender || !sizeMatch) {
+                std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->SetViewport(
+                    nvrhi::Viewport((float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y));
+                std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->UpdateCache();
+
+                ToneMappingPass::CreateParameters params;
+                params.exposureBufferOverride = m_ToneMappingPass->GetExposureBuffer();
+                m_ToneMappingPassRender = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses,
+                    m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
+            }
+            auto toneMappingParams = m_ui.ToneMappingParams;
+            m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
+            m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->RenderLdrLinear, &m_BindingCache);
+            m_PreviousViewsValid = false;
+        }
+        // LDR 模式：先做 540p ToneMapping，再 FGSR 上采样
+        else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.Global_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
+            // 检查纹理尺寸是否与 m_RenderingRectSize 一致，不一致则需要重建
+            auto texDesc = m_RenderTargets->RenderLdrLinear->getDesc();
+            bool sizeMatch = (texDesc.width == (uint32_t)m_RenderingRectSize.x && texDesc.height == (uint32_t)m_RenderingRectSize.y);
+
+            // 懒加载创建 540p ToneMappingPass，或尺寸不匹配时重建
+            if (!m_ToneMappingPassRender || !sizeMatch) {
+                // 更新 view 的 viewport
+                std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->SetViewport(
+                    nvrhi::Viewport((float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y));
+                std::dynamic_pointer_cast<PlanarView>(m_RenderTonemappingView)->UpdateCache();
+
+                ToneMappingPass::CreateParameters params;
+                params.exposureBufferOverride = m_ToneMappingPass->GetExposureBuffer();
+                m_ToneMappingPassRender = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses,
+                    m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
+            }
+            // Step 1: 540p ToneMapping: HdrColor → RenderLdrLinear
+            auto toneMappingParams = m_ui.ToneMappingParams;
+            m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
+
+            // FGSR_SR SETUP
+            auto fgsr_sr_consts = sl::FGSR_SRConstants{};
+
+            // 主模式
+            fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+            fgsr_sr_consts.upsampleMode = m_ui.FGSR_SR_UpsampleMode;
+            fgsr_sr_consts.scaleFactor = (uint32_t)m_ui.FGSR_SR_ScaleFactor;
+
+            // 分辨率
+            fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
+            fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+
+            // Camera matrix
+            dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+            dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
+            dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
+            fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
+
+            // Thresholds
+            fgsr_sr_consts.distance_diff_threshold = 100.f;
+            fgsr_sr_consts.depth_diff_threshold = 0.003f;
+            fgsr_sr_consts.maxFlowWeight = 0.01f;
+
+            // EveryFrameUpsampleBlend 模式的步骤开关
+            fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
+            fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
+            fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
+
+            // Blend 选项
+            fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
+            fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+
+            // Jitter Fix 选项
+            fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;
+            fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
+
+            // 2x 模型选择
+            fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
+
+            NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+            // Prepare resources state
+            auto RenderLdrLinearDesc = m_RenderTargets->RenderLdrLinear->getDesc();
+            auto AAResolvedColorDesc = m_RenderTargets->AAResolvedColor->getDesc();
+            m_CommandList->setTextureState(m_RenderTargets->RenderLdrLinear, nvrhi::AllSubresources, RenderLdrLinearDesc.initialState);
+            m_CommandList->setTextureState(m_RenderTargets->AAResolvedColor, nvrhi::AllSubresources, AAResolvedColorDesc.initialState);
+            m_CommandList->commitBarriers();
+
+            // Step 2: FGSR 上采样: RenderLdrLinear (540p LDR) → AAResolvedColor (1080p LDR)
+            NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
+                m_View->GetChildView(ViewType::PLANAR, 0),
+                m_RenderTargets->RenderLdrLinear,  // 输入 (renderSize, LDR linear)
+                m_RenderTargets->AAResolvedColor); // 输出 (displaySize, LDR linear)
+
+            NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+            m_PreviousViewsValid = true;
         }
         else
 #endif // STREAMLINE_FEATURE_FGSR_SR
         {
-            // IF YOU DO NOTHING SPECIAL (or FGSR LDR mode) -> FORWARD TEXTURE
-            // LDR 模式会在 tonemap 之后调用 FGSR
+            // IF YOU DO NOTHING SPECIAL -> FORWARD TEXTURE
             m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->HdrColor, &m_BindingCache);
             m_PreviousViewsValid = false;
         }
@@ -1567,7 +1687,24 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
     //DO TONEMAPPING
     nvrhi::ITexture* texToDisplay;
-    if (m_ui.EnableToneMapping)
+
+#ifdef STREAMLINE_FEATURE_FGSR_SR
+    // FGSR LDR 模式：540p 已经做过 ToneMapping，只需要 gamma 校正
+    bool isFGSR_LDR_Mode = (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.Global_UseHDRInput);
+#else
+    bool isFGSR_LDR_Mode = false;
+#endif
+
+    if (isFGSR_LDR_Mode)
+    {
+        // LDR 模式：AAResolvedColor 是 linear LDR，blit 到 LdrColor 做 gamma 校正
+        // LdrColor 是 SRGBA8_UNORM，写入时自动 linear→sRGB
+        m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->LdrFramebuffer->GetFramebuffer(*m_TonemappingView),
+            m_RenderTargets->AAResolvedColor, &m_BindingCache);
+        m_CommandList->copyTexture(m_RenderTargets->ColorspaceCorrectionColor, nvrhi::TextureSlice(), m_RenderTargets->LdrColor, nvrhi::TextureSlice());
+        texToDisplay = m_RenderTargets->ColorspaceCorrectionColor;
+    }
+    else if (m_ui.EnableToneMapping)
     {
         auto toneMappingParams = m_ui.ToneMappingParams;
         if (exposureResetRequired)
@@ -1581,6 +1718,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         texToDisplay = m_RenderTargets->ColorspaceCorrectionColor;
     }
     else {
+        // ToneMapping 禁用时，直接使用 AAResolvedColor
         texToDisplay = m_RenderTargets->AAResolvedColor;
     }
 
@@ -1615,92 +1753,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         NVWrapper::Get().EvaluateNIS(m_CommandList);
     }
 
-#ifdef STREAMLINE_FEATURE_FGSR_SR
-    //
-    // DO FGSR_SR LDR 模式 (同尺寸处理: displaySize → displaySize)
-    // ToneMapping 之后，输入 PreUIColor (LDR)
-    //
-    if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.FGSR_SR_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
-        // Blit PreUIColor (displaySize, LDR) → FGSR_SRInput (renderSize, LDR)
-        engine::BlitParameters blitParams{};
-        blitParams.targetFramebuffer = m_RenderTargets->FGSR_SRInputFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
-        blitParams.sourceTexture = m_RenderTargets->PreUIColor;
-        m_CommonPasses->BlitTexture(m_CommandList, blitParams, &m_BindingCache);
-
-        // FGSR_SR SETUP
-        auto fgsr_sr_consts = sl::FGSR_SRConstants{};
-
-        // 主模式
-        fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
-        fgsr_sr_consts.upsampleMode = m_ui.FGSR_SR_UpsampleMode;
-        fgsr_sr_consts.scaleFactor = (uint32_t)m_ui.FGSR_SR_ScaleFactor;
-
-        // 分辨率
-        fgsr_sr_consts.renderExtents = { (float)m_RenderingRectSize.x, (float)m_RenderingRectSize.y };
-        fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
-
-        // Camera matrix
-        dm::float4x4 viewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
-        dm::float4x4 projectionMatrix = m_View->GetProjectionMatrix(false);
-        dm::float4x4 viewProjMatrix = viewMatrix * projectionMatrix;
-        fgsr_sr_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(viewProjMatrix));
-
-        // Thresholds
-        fgsr_sr_consts.distance_diff_threshold = 100.f;
-        fgsr_sr_consts.depth_diff_threshold = 0.003f;
-        fgsr_sr_consts.maxFlowWeight = 0.01f;
-
-        // EveryFrameUpsampleBlend 模式的步骤开关
-        fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
-        fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
-        fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;  // Jitter Fix: Color 上采样前修复
-
-        // Blend 选项
-        fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
-        fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
-
-        // Jitter Fix 选项
-        fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;  // Depth/MV Jitter 修复
-        fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;  // Color 在 Blend 内部修复
-
-        // 2x 模型选择
-        fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
-
-        NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
-
-        // Prepare resources state
-        auto FGSRInputDesc = m_RenderTargets->FGSR_SRInput->getDesc();
-        auto PreUIColorDesc = m_RenderTargets->PreUIColor->getDesc();
-        m_CommandList->setTextureState(m_RenderTargets->FGSR_SRInput, nvrhi::AllSubresources, FGSRInputDesc.initialState);
-        m_CommandList->setTextureState(m_RenderTargets->PreUIColor, nvrhi::AllSubresources, PreUIColorDesc.initialState);
-        m_CommandList->commitBarriers();
-
-        // TAG STREAMLINE RESOURCES - input FGSR_SRInput (renderSize, 8-bit LDR), output PreUIColor (displaySize)
-        // depth 和 motionVectors 已经在 TagResources_General 中标记
-        NVWrapper::Get().TagResources_FGSR_SR(m_CommandList,
-            m_View->GetChildView(ViewType::PLANAR, 0),
-            m_RenderTargets->FGSR_SRInput,    // 输入 (renderSize, 8-bit LDR)
-            m_RenderTargets->PreUIColor);     // 输出 (displaySize)
-
-        NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
-        m_PreviousViewsValid = true;
-    }
-    else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && !m_ui.FGSR_SR_UseHDRInput && m_ui.DLSS_DebugShowFullRenderingBuffer) {
-        // Debug LDR: 先生成 540p 输入，再显示
-        // Step 1: Blit PreUIColor (1080p) → FGSR_SRInput (540p)
-        engine::BlitParameters blitDown{};
-        blitDown.targetFramebuffer = m_RenderTargets->FGSR_SRInputFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
-        blitDown.sourceTexture = m_RenderTargets->PreUIColor;
-        m_CommonPasses->BlitTexture(m_CommandList, blitDown, &m_BindingCache);
-
-        // Step 2: Blit FGSR_SRInput (540p) → PreUIColor (1080p) 显示原始输入
-        engine::BlitParameters blitUp{};
-        blitUp.targetFramebuffer = m_RenderTargets->PreUIFramebuffer->GetFramebuffer(nvrhi::AllSubresources);
-        blitUp.sourceTexture = m_RenderTargets->FGSR_SRInput;
-        m_CommonPasses->BlitTexture(m_CommandList, blitUp, &m_BindingCache);
-        m_PreviousViewsValid = false;
-    }
-#endif // STREAMLINE_FEATURE_FGSR_SR
+    // 注意：FGSR LDR 模式已经移到 ToneMapping 之前处理 (正确的流程：540p HDR → 540p LDR → FGSR上采样)
+    // 旧的错误 LDR 流程已删除 (之前是 1080p ToneMap → downscale 到 540p → FGSR upscale)
 
     NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
 

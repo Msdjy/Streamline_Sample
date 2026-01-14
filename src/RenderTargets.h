@@ -58,6 +58,7 @@ public:
     nvrhi::TextureHandle PreUIColor;
     nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR
     nvrhi::TextureHandle FGSR_SRInput;   // renderSize 8-bit LDR input for FGSR_SR
+    nvrhi::TextureHandle RenderLdrLinear; // renderSize RGBA16F for 540p ToneMapping output (linear LDR)
     nvrhi::TextureHandle SpecHitDistance;
     nvrhi::TextureHandle GBufferDiffuseRR;
     nvrhi::TextureHandle GBufferSpecularRR;
@@ -77,6 +78,7 @@ public:
     std::shared_ptr<donut::engine::FramebufferFactory> PreUIFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SROutputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SRInputFramebuffer;
+    std::shared_ptr<donut::engine::FramebufferFactory> RenderLdrLinearFramebuffer; // 540p RGBA16F for LDR linear
     std::shared_ptr<donut::engine::FramebufferFactory> SpecHitDistanceBuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> UnjitteredDepthMVFramebuffer;
 
@@ -138,6 +140,15 @@ public:
         desc.initialState = nvrhi::ResourceStates::RenderTarget;
         desc.debugName = "FGSR_SRInput";
         FGSR_SRInput = device->createTexture(desc);
+
+        // RenderLdrLinear: renderSize, RGBA8 for 540p ToneMapping output
+        // 使用非 sRGB 格式，避免 D3D12 自动 gamma 转换与 CUDA 读取不兼容
+        // ToneMappingPass 输出 linear 值，CUDA 读取 linear 值
+        desc.format = nvrhi::Format::RGBA8_UNORM;
+        desc.isUAV = false;
+        desc.initialState = nvrhi::ResourceStates::RenderTarget;
+        desc.debugName = "RenderLdrLinear";
+        RenderLdrLinear = device->createTexture(desc);
 
         // UnjitteredDepth: renderSize, for FGSR unjittered depth
         {
@@ -241,6 +252,7 @@ public:
                 PreUIColor,
                 FGSR_SROutput,
                 FGSR_SRInput,
+                RenderLdrLinear,  // 540p LDR ToneMapping output - 必须在虚拟资源中绑定内存
                 NisColor,
                 AmbientOcclusion,
                 UnjitteredMV
@@ -297,6 +309,9 @@ public:
         FGSR_SRInputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         FGSR_SRInputFramebuffer->RenderTargets = { FGSR_SRInput };
 
+        RenderLdrLinearFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
+        RenderLdrLinearFramebuffer->RenderTargets = { RenderLdrLinear };
+
         // Unjittered Depth + MV framebuffer for FGSR
         UnjitteredDepthMVFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         UnjitteredDepthMVFramebuffer->RenderTargets = { UnjitteredMV };
@@ -319,6 +334,7 @@ public:
         commandList->clearTextureFloat(PreUIColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(FGSR_SROutput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(FGSR_SRInput, nvrhi::AllSubresources, nvrhi::Color(0.f));
+        commandList->clearTextureFloat(RenderLdrLinear, nvrhi::AllSubresources, nvrhi::Color(0.f));  // 虚拟资源必须初始化
         commandList->clearTextureFloat(AAResolvedColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(SpecHitDistance, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(GBufferDiffuseRR, nvrhi::AllSubresources, nvrhi::Color(0.f));

@@ -512,6 +512,11 @@ protected:
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Render separate unjittered pass for Depth and MV\n(works with DLSS and FGSR)");
 
+            // Global HDR/LDR Input Mode (DLSS/FGSR 通用)
+            ImGui::Checkbox("Use HDR Input", &m_ui.Global_UseHDRInput);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("HDR: upscale before ToneMap (default)\nLDR: 540p ToneMap then upscale");
+
 #ifdef STREAMLINE_FEATURE_FGSR_SR
             //
             //  FGSR_SR
@@ -569,11 +574,7 @@ protected:
                 ImGui::Checkbox("Use LOD Bias", &m_ui.FGSR_SR_UseLodBias);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Use same LOD bias as DLSS for texture sampling");
-
-                ImGui::SameLine();
-                ImGui::Checkbox("HDR Input", &m_ui.FGSR_SR_UseHDRInput);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Use HDR color input (like DLSS). Disable for old LDR mode.");
+                // HDR Input 已移到 Global 区域
 
                 // ========== EveryFrameUpsampleBlend 模式的步骤开关 ==========
                 if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eEveryFrameUpsampleBlend)
