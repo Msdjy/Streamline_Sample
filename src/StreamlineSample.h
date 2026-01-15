@@ -255,6 +255,7 @@ private:
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     sl::FGSR_SRMode                                 m_FGSR_SR_Last_Mode = sl::FGSR_SRMode::eOff;
     int                                             m_FGSR_SR_Last_ScaleFactor = 1;
+    bool                                            m_FGSR_SR_Last_UseHDRInput = true;
 #endif
 
 public:

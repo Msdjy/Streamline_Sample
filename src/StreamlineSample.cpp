@@ -995,18 +995,24 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     m_ui.DLSS_Last_AA = m_ui.AAMode;
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // Reset FGSR_SR vars if we stop using it or change scale factor
+    // Reset FGSR_SR vars if we stop using it, change scale factor, or switch HDR/LDR
     {
         int effectiveScale = m_ui.FGSR_SR_ScaleFactor;
+        bool useHDRInput = m_ui.Global_UseHDRInput;
 
         if (m_FGSR_SR_Last_Mode != sl::FGSR_SRMode::eOff &&
-            (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff || effectiveScale != m_FGSR_SR_Last_ScaleFactor))
+            (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eOff ||
+             effectiveScale != m_FGSR_SR_Last_ScaleFactor ||
+             useHDRInput != m_FGSR_SR_Last_UseHDRInput))  // HDR/LDR 切换时也需要清理
         {
-            // Cleanup FGSR resources when turning off or changing scale factor
+            // Cleanup FGSR resources when turning off, changing scale factor, or switching HDR/LDR
             NVWrapper::Get().CleanupFGSR_SR(true);
+            // Also reset ToneMappingPassRender to ensure fresh state on LDR mode
+            m_ToneMappingPassRender.reset();
         }
         m_FGSR_SR_Last_Mode = m_ui.FGSR_SR_Mode;
         m_FGSR_SR_Last_ScaleFactor = effectiveScale;
+        m_FGSR_SR_Last_UseHDRInput = useHDRInput;
     }
 #endif
 
@@ -1486,6 +1492,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             m_ToneMappingPassRender = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses,
                 m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
         }
+        // Ensure proper resource states before ToneMapping
+        m_CommandList->setTextureState(m_RenderTargets->RenderLdrLinear, nvrhi::AllSubresources, nvrhi::ResourceStates::RenderTarget);
+        m_CommandList->commitBarriers();
+
         auto toneMappingParams = m_ui.ToneMappingParams;
         m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
         dlssInput = m_RenderTargets->RenderLdrLinear;  // LDR 输入
@@ -1605,6 +1615,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                 m_ToneMappingPassRender = std::make_unique<ToneMappingPass>(GetDevice(), m_ShaderFactory, m_CommonPasses,
                     m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
             }
+            // Ensure proper resource states before ToneMapping
+            m_CommandList->setTextureState(m_RenderTargets->RenderLdrLinear, nvrhi::AllSubresources, nvrhi::ResourceStates::RenderTarget);
+            m_CommandList->commitBarriers();
+
             auto toneMappingParams = m_ui.ToneMappingParams;
             m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
             m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->AAResolvedFramebuffer->GetFramebuffer(*m_View), m_RenderTargets->RenderLdrLinear, &m_BindingCache);
@@ -1629,8 +1643,15 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                     m_RenderTargets->RenderLdrLinearFramebuffer, *m_RenderTonemappingView, params);
             }
             // Step 1: 540p ToneMapping: HdrColor → RenderLdrLinear
+            // Ensure proper resource states before ToneMapping
+            m_CommandList->setTextureState(m_RenderTargets->RenderLdrLinear, nvrhi::AllSubresources, nvrhi::ResourceStates::RenderTarget);
+            m_CommandList->commitBarriers();
+
             auto toneMappingParams = m_ui.ToneMappingParams;
             m_ToneMappingPassRender->SimpleRender(m_CommandList, toneMappingParams, *m_RenderTonemappingView, m_RenderTargets->HdrColor);
+
+            // Commit barriers after ToneMapping to ensure RenderLdrLinear is ready for reading
+            m_CommandList->commitBarriers();
 
             // FGSR_SR SETUP
             auto fgsr_sr_consts = sl::FGSR_SRConstants{};
