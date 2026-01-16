@@ -252,6 +252,9 @@ public:
     // 2x 模型选择
     bool                                FGSR_SR_UseOur2xModel = false;  // false=原版, true=我们的
 
+    // Halton 2x 多模型模式 (测试用，16个模型根据 jitter 点选择)
+    bool                                FGSR_SR_UseHalton2xModels = false;
+
     // 计算出的上采样模式 (供内部使用)
     sl::FGSR_UpsampleMode               FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;
 #endif

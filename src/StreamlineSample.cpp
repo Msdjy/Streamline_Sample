@@ -1575,6 +1575,12 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
 
+            // Halton 2x 多模型模式
+            fgsr_sr_consts.useHalton2xModels = m_ui.FGSR_SR_UseHalton2xModels ? 1 : 0;
+            // Halton 序列用 16 点，MSAA 用 8 点
+            int jitterSeqLen = (m_ui.TemporalAntiAliasingJitter == donut::render::TemporalAntiAliasingJitter::Halton) ? 16 : 8;
+            fgsr_sr_consts.jitterIndex = GetFrameIndex() % jitterSeqLen;
+
             NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 
             // Prepare resources state
@@ -1691,6 +1697,12 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
+
+            // Halton 2x 多模型模式
+            fgsr_sr_consts.useHalton2xModels = m_ui.FGSR_SR_UseHalton2xModels ? 1 : 0;
+            // Halton 序列用 16 点，MSAA 用 8 点
+            int jitterSeqLen2 = (m_ui.TemporalAntiAliasingJitter == donut::render::TemporalAntiAliasingJitter::Halton) ? 16 : 8;
+            fgsr_sr_consts.jitterIndex = GetFrameIndex() % jitterSeqLen2;
 
             NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
 

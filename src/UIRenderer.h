@@ -581,6 +581,14 @@ protected:
                     ImGui::Checkbox("Use Our 2x Model", &m_ui.FGSR_SR_UseOur2xModel);
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("false=Original (quicksrnet_small_2x)\ntrue=Ours (quick_srnet_small)");
+
+                    // Halton 2x 多模型模式 (仅当 TRT 模式时显示)
+                    if (m_ui.FGSR_SR_UseTRT)
+                    {
+                        ImGui::Checkbox("Use Halton 2x Models", &m_ui.FGSR_SR_UseHalton2xModels);
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip("Test mode: use 16 separate models,\none for each Halton jitter point (0-15).\nModel files: halton_2x_0.engine ~ halton_2x_15.engine");
+                    }
                 }
 
                 // ========== DLSS对齐选项 ==========
