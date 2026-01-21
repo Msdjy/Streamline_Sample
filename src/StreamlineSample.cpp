@@ -932,31 +932,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         m_ui.DLSSG_cleanup_needed = false;
     }
 
-#ifdef STREAMLINE_FEATURE_FGSR_FG
-    // FGSR_FG Frame Generation
-    if (NVWrapper::Get().GetFGSR_FGAvailable())
-    {
-        sl::FGSR_FGConstants fgsr_fg_consts{};
-        fgsr_fg_consts.mode = m_ui.FGSR_FG_Mode;
-        fgsr_fg_consts.FPS = m_ui.FGSR_FG_FPS;
-        fgsr_fg_consts.delta = m_ui.FGSR_FG_Delta;
-
-        // Scale factor: 使用 debug 值或自动计算
-        if (m_ui.FGSR_FG_UseDebugScaleFactor)
-        {
-            fgsr_fg_consts.upsample_factor = m_ui.FGSR_FG_DebugScaleFactor;
-        }
-        else
-        {
-            // 自动计算: color(PreUIColor) / depth 的比例
-            // PreUIColor = m_DisplaySize, Depth = m_RenderingRectSize
-            fgsr_fg_consts.upsample_factor = (float)m_DisplaySize.x / (float)m_RenderingRectSize.x;
-        }
-
-        NVWrapper::Get().SetFGSR_FGOptions(fgsr_fg_consts);
-    }
-#endif
-
 #if STREAMLINE_FEATURE_LATEWARP
     if (NVWrapper::Get().GetLatewarpAvailable())
     {
@@ -1486,6 +1461,43 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         NVWrapper::Get().SetSLConsts(slConstants);
     }
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // FGSR_FG Frame Generation - set constants after m_View is initialized
+    if (NVWrapper::Get().GetFGSR_FGAvailable())
+    {
+        sl::FGSR_FGConstants fgsr_fg_consts{};
+        fgsr_fg_consts.mode = m_ui.FGSR_FG_Mode;
+        fgsr_fg_consts.FPS = m_ui.FGSR_FG_FPS;
+        fgsr_fg_consts.delta = m_ui.FGSR_FG_Delta;
+
+        // Scale factor: 使用 debug 值或自动计算
+        if (m_ui.FGSR_FG_UseDebugScaleFactor)
+        {
+            fgsr_fg_consts.upsample_factor = m_ui.FGSR_FG_DebugScaleFactor;
+        }
+        else
+        {
+            // 自动计算: color(PreUIColor) / depth 的比例
+            // PreUIColor = m_DisplaySize, Depth = m_RenderingRectSize
+            fgsr_fg_consts.upsample_factor = (float)m_DisplaySize.x / (float)m_RenderingRectSize.x;
+        }
+
+        // Camera matrix for world space distance calculation (same as UE plugin)
+        dm::float4x4 fgViewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
+        dm::float4x4 fgProjectionMatrix = m_View->GetProjectionMatrix(false);
+        dm::float4x4 fgViewProjMatrix = fgViewMatrix * fgProjectionMatrix;
+        fgsr_fg_consts.invViewProjectionMatrix = make_sl_float4x4(inverse(fgViewProjMatrix));
+
+        // Thresholds (same values as UE plugin)
+        fgsr_fg_consts.distance_diff_threshold = 100.0f;
+        fgsr_fg_consts.depth_diff_threshold_fg = 0.003f;
+        fgsr_fg_consts.color_diff_threshold_fg = 0.01f;
+        fgsr_fg_consts.bDynamicMask = false;
+
+        NVWrapper::Get().SetFGSR_FGOptions(fgsr_fg_consts);
+    }
+#endif
+
     // TAG STREAMLINE RESOURCES
     // Use unjittered depth/MV when Global_UseUnjitteredPass is enabled
     nvrhi::ITexture* depthToTag = m_ui.Global_UseUnjitteredPass
@@ -1995,7 +2007,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         GetDeviceManager()->SetVsyncEnabled(m_ui.EnableVsync);
     }
 
-    // CLOSE: 
+    // CLOSE:
     if (GetFrameIndex() == m_ScriptingConfig.maxFrames)
         glfwSetWindowShouldClose(GetDeviceManager()->GetWindow(), GLFW_TRUE);
 }
