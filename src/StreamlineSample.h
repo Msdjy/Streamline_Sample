@@ -292,6 +292,11 @@ public:
     virtual void SceneLoaded() override;
     virtual void RenderSplashScreen(nvrhi::IFramebuffer* framebuffer) override;
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // Called by UIRenderer after UI rendering when DebugWithUI is enabled
+    void EvaluateFGSR_FGWithUI(nvrhi::IFramebuffer* framebuffer);
+#endif
+
 };
 
 struct ViewportData

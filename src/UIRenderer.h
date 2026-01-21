@@ -108,9 +108,25 @@ public:
     }
 
     virtual bool ShouldRenderUnfocused() override
-    { 
-        return true; 
+    {
+        return true;
     }
+
+    virtual void Render(nvrhi::IFramebuffer* framebuffer) override
+    {
+        // First, render UI normally
+        ImGui_Renderer::Render(framebuffer);
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+        // After UI rendering, evaluate FGSR_FG if DebugWithUI is enabled
+        // At this point, framebuffer contains scene + UI
+        if (m_ui.FGSR_FG_DebugWithUI && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
+        {
+            m_app->EvaluateFGSR_FGWithUI(framebuffer);
+        }
+#endif
+    }
+
 protected:
     virtual void buildUI(void) override
     {
@@ -700,6 +716,11 @@ protected:
             }
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Enable to use debug scale factor.\nDisable to auto-calculate from texture sizes.");
+
+            // Debug With UI checkbox
+            ImGui::Checkbox("Debug With UI", &m_ui.FGSR_FG_DebugWithUI);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Enable to include UI in frame generation.\nUI will be interpolated (may have artifacts).\nDisable for normal behavior (no UI in interpolated frames).");
 
             if (m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
             {
