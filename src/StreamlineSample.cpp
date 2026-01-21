@@ -81,6 +81,9 @@ StreamlineSample::StreamlineSample(
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     m_ui.FGSR_SR_Supported = NVWrapper::Get().GetFGSR_SRAvailable();
 #endif
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    m_ui.FGSR_FG_Supported = NVWrapper::Get().GetFGSR_FGAvailable();
+#endif
 #if STREAMLINE_FEATURE_LATEWARP
     m_ui.Latewarp_Supported = NVWrapper::Get().GetLatewarpAvailable();
 #endif
@@ -238,6 +241,9 @@ StreamlineSample::~StreamlineSample()
     NVWrapper::Get().CleanupDLSSG(false);
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     NVWrapper::Get().CleanupFGSR_SR(true);
+#endif
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    NVWrapper::Get().CleanupFGSR_FG(true);
 #endif
 #if STREAMLINE_FEATURE_LATEWARP
     NVWrapper::Get().CleanupLatewarp(true);
@@ -925,6 +931,32 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         NVWrapper::Get().CleanupDLSSG(false);
         m_ui.DLSSG_cleanup_needed = false;
     }
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // FGSR_FG Frame Generation
+    if (NVWrapper::Get().GetFGSR_FGAvailable())
+    {
+        sl::FGSR_FGConstants fgsr_fg_consts{};
+        fgsr_fg_consts.mode = m_ui.FGSR_FG_Mode;
+        fgsr_fg_consts.FPS = m_ui.FGSR_FG_FPS;
+        fgsr_fg_consts.delta = m_ui.FGSR_FG_Delta;
+
+        // Scale factor: 使用 debug 值或自动计算
+        if (m_ui.FGSR_FG_UseDebugScaleFactor)
+        {
+            fgsr_fg_consts.upsample_factor = m_ui.FGSR_FG_DebugScaleFactor;
+        }
+        else
+        {
+            // 自动计算: color(PreUIColor) / depth 的比例
+            // PreUIColor = m_DisplaySize, Depth = m_RenderingRectSize
+            fgsr_fg_consts.upsample_factor = (float)m_DisplaySize.x / (float)m_RenderingRectSize.x;
+        }
+
+        NVWrapper::Get().SetFGSR_FGOptions(fgsr_fg_consts);
+    }
+#endif
+
 #if STREAMLINE_FEATURE_LATEWARP
     if (NVWrapper::Get().GetLatewarpAvailable())
     {
@@ -1167,6 +1199,16 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         }
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // FG Debug Scale Factor: 单独控制渲染分辨率（用于 FG 单独测试）
+    if (m_ui.FGSR_FG_UseDebugScaleFactor && m_ui.FGSR_FG_DebugScaleFactor > 1.0f)
+    {
+        int scaleFactor = (int)m_ui.FGSR_FG_DebugScaleFactor;
+        m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
+                                m_DisplaySize.y / scaleFactor };
+    }
+#endif // STREAMLINE_FEATURE_FGSR_FG
 
     // PASS SETUP
     {
@@ -1457,6 +1499,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         mvToTag,
         depthToTag,
         m_RenderTargets->PreUIColor);
+
+    // FGSR_FG is evaluated later after PreUIColor is filled (see below after BlitTexture)
 
 #ifdef STREAMLINE_FEATURE_DLSS_RR
     // Set feature options
@@ -1789,6 +1833,29 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 
 
     m_CommonPasses->BlitTexture(m_CommandList, m_RenderTargets->PreUIFramebuffer->GetFramebuffer(*m_View), texToDisplay, &m_BindingCache);
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // FGSR_FG Evaluate - generates interpolated frame to ctx.debugTemp
+    // Must be called AFTER PreUIColor is filled (BlitTexture above)
+    // Hook Present will then display the interpolated frame before the original frame
+    if (NVWrapper::Get().GetFGSR_FGAvailable() && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
+    {
+        // Re-tag HUDLessColor with the now-filled PreUIColor
+        nvrhi::ITexture* depthToTag = m_ui.Global_UseUnjitteredPass
+            ? m_RenderTargets->UnjitteredDepth
+            : m_RenderTargets->Depth;
+        nvrhi::ITexture* mvToTag = m_ui.Global_UseUnjitteredPass
+            ? m_RenderTargets->UnjitteredMV
+            : m_RenderTargets->MotionVectors;
+        NVWrapper::Get().TagResources_General(m_CommandList,
+            m_View->GetChildView(ViewType::PLANAR, 0),
+            mvToTag,
+            depthToTag,
+            m_RenderTargets->PreUIColor);
+
+        NVWrapper::Get().EvaluateFGSR_FG(m_CommandList);
+    }
+#endif
 
     //
     // DO NIS

@@ -224,6 +224,9 @@ bool SLWrapper::Initialize_preDevice(nvrhi::GraphicsAPI api)
 #ifdef STREAMLINE_FEATURE_FGSR_SR
         sl::kFeatureFGSR_SR,
 #endif
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+        sl::kFeatureFGSR_FG,
+#endif
 #ifdef STREAMLINE_FEATURE_LATEWARP
         sl::kFeatureLatewarp,
 #endif
@@ -507,6 +510,19 @@ void SLWrapper::UpdateFeatureAvailable(donut::app::DeviceManager* deviceManager)
         // MessageBoxA(NULL, "FGSR_SR is NOT supported!", "Debug", MB_OK);
     }
 #endif
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    OutputDebugStringA("=== FGSR_FG check START ===\n");
+
+    sl::FeatureRequirements fgsr_fg_requirements;
+    slGetFeatureRequirements(sl::kFeatureFGSR_FG, fgsr_fg_requirements);
+    LogFeatureRequirements("FGSR_FG", fgsr_fg_requirements);
+
+    m_fgsr_fg_available = slIsFeatureSupported(sl::kFeatureFGSR_FG, adapterInfo) == sl::Result::eOk;
+    if (m_fgsr_fg_available) log::info("FGSR_FG is supported on this system.");
+    else log::warning("FGSR_FG is not fully functional on this system.");
+#endif
+
 #ifdef STREAMLINE_FEATURE_LATEWARP
     sl::FeatureRequirements latewarp_requirements;
     slGetFeatureRequirements(sl::kFeatureLatewarp, latewarp_requirements);
@@ -1566,6 +1582,89 @@ void SLWrapper::CleanupFGSR_SR(bool wfi) {
     sl::Result result = slFreeResources(sl::kFeatureFGSR_SR, m_viewport);
     // add an exception for eErrorMissingOrInvalidAPI for FGSR_SR plugin that doesn't export slFreeResources
     successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_FGSR_SR");
+}
+#endif
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+// Function pointer type for slSetFGSR_FGConstants
+using PFun_slSetFGSR_FGConstants = sl::Result(const void* data, uint32_t frameIndex, uint32_t id);
+static PFun_slSetFGSR_FGConstants* s_slSetFGSR_FGConstants = nullptr;
+
+void SLWrapper::SetFGSR_FGOptions(const sl::FGSR_FGConstants consts)
+{
+    if (!m_sl_initialised || !m_fgsr_fg_available) {
+        return;
+    }
+
+    m_fgsr_fg_consts = consts;
+
+    if (!s_slSetFGSR_FGConstants) {
+        sl::Result res = slGetFeatureFunction(sl::kFeatureFGSR_FG, "slSetFGSR_FGConstants", (void*&)s_slSetFGSR_FGConstants);
+        if (res != sl::Result::eOk || !s_slSetFGSR_FGConstants) {
+            log::warning("Failed to get slSetFGSR_FGConstants function pointer");
+            return;
+        }
+    }
+
+    sl::Result callRes = s_slSetFGSR_FGConstants(&m_fgsr_fg_consts, 0, (uint32_t)m_viewport);
+    if (callRes != sl::Result::eOk) {
+        log::warning("slSetFGSR_FGConstants failed with result: %d", (int)callRes);
+    }
+}
+
+void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
+
+    void* nativeCommandList = nullptr;
+
+#if DONUT_WITH_DX11
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11)
+        nativeCommandList = m_Device->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext);
+#endif
+
+#if DONUT_WITH_DX12
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+#endif
+
+#if DONUT_WITH_VULKAN
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer);
+#endif
+
+    if (nativeCommandList == nullptr) {
+        log::warning("Failed to retrieve context for FGSR_FG evaluation.");
+        return;
+    }
+
+    sl::ViewportHandle view(m_viewport);
+    const sl::BaseStructure* inputs[] = { &view };
+
+    sl::Result evalRes = slEvaluateFeature(sl::kFeatureFGSR_FG, *m_currentFrame, inputs, _countof(inputs), nativeCommandList);
+    if (evalRes != sl::Result::eOk) {
+        log::warning("slEvaluateFeature FGSR_FG failed with result: %d", (int)evalRes);
+    }
+
+    commandList->clearState();
+}
+
+void SLWrapper::CleanupFGSR_FG(bool wfi) {
+    if (!m_sl_initialised) {
+        log::warning("SL not initialised.");
+        return;
+    }
+
+    if (!m_fgsr_fg_available) {
+        log::warning("FGSR_FG not available.");
+        return;
+    }
+
+    if (wfi) {
+        m_Device->waitForIdle();
+    }
+
+    sl::Result result = slFreeResources(sl::kFeatureFGSR_FG, m_viewport);
+    // add an exception for eErrorMissingOrInvalidAPI for FGSR_FG plugin that doesn't export slFreeResources
+    successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_FGSR_FG");
 }
 #endif
 

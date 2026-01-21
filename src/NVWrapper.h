@@ -61,6 +61,9 @@
 #ifdef STREAMLINE_FEATURE_FGSR_SR
 #include <sl_fgsr_sr.h>
 #endif
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+#include <sl_fgsr_fg.h>
+#endif
 #if STREAMLINE_FEATURE_LATEWARP
 #include <sl_latewarp.h>
 #endif
@@ -440,6 +443,11 @@ protected:
     sl::FGSR_SRConstants m_fgsr_sr_consts{};
 #endif
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    bool m_fgsr_fg_available = false;
+    sl::FGSR_FGConstants m_fgsr_fg_consts{};
+#endif
+
     bool m_deepdvc_available = false;
     sl::DeepDVCOptions m_deepdvc_consts{};
 
@@ -588,6 +596,14 @@ public:
     bool GetFGSR_SRLastEnable() { return m_fgsr_sr_consts.mode != sl::FGSR_SRMode::eOff; }
     virtual void EvaluateFGSR_SR(nvrhi::ICommandList *commandList) = 0;
     virtual void CleanupFGSR_SR(bool wfi) = 0;
+#endif
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    virtual void SetFGSR_FGOptions(const sl::FGSR_FGConstants consts) = 0;
+    bool GetFGSR_FGAvailable() { return m_fgsr_fg_available; }
+    bool GetFGSR_FGLastEnable() { return m_fgsr_fg_consts.mode != sl::FGSR_FGMode::eOff; }
+    virtual void EvaluateFGSR_FG(nvrhi::ICommandList *commandList) = 0;
+    virtual void CleanupFGSR_FG(bool wfi) = 0;
 #endif
 
     virtual void SetDeepDVCOptions(const sl::DeepDVCOptions consts) = 0;

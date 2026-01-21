@@ -179,6 +179,12 @@ public:
     void CleanupFGSR_SR(bool wfi) override;
 #endif
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    void SetFGSR_FGOptions(const sl::FGSR_FGConstants consts) override;
+    void EvaluateFGSR_FG(nvrhi::ICommandList* commandList) override;
+    void CleanupFGSR_FG(bool wfi) override;
+#endif
+
     void SetDeepDVCOptions(const sl::DeepDVCOptions consts) override;
     void QueryDeepDVCState(uint64_t& estimatedVRamUsage) override;
     void EvaluateDeepDVC(nvrhi::ICommandList* commandList) override;

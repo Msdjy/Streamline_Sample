@@ -668,6 +668,65 @@ protected:
             if (m_dev_view_TopLevelDLSS == 0) popDisabled();
             ImGui::Unindent();
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+            //
+            //  FGSR_FG (Frame Generation)
+            //
+
+            ImGui::Separator();
+            ImGui::Text("FGSR Frame Generation");
+            ImGui::Indent();
+            ImGui::Text("Supported: %s", m_ui.FGSR_FG_Supported ? "yes" : "no");
+            if (! m_ui.FGSR_FG_Supported) pushDisabled();
+
+            // Mode: Off / On
+            int fgsr_fg_mode = (m_ui.FGSR_FG_Mode == sl::FGSR_FGMode::eOn) ? 1 : 0;
+            ImGui::Text("Mode");
+            ImGui::SameLine();
+            ImGui::Combo("##FGSR_FGMode", &fgsr_fg_mode, "Off\0On\0");
+            m_ui.FGSR_FG_Mode = (fgsr_fg_mode == 1) ? sl::FGSR_FGMode::eOn : sl::FGSR_FGMode::eOff;
+
+            // Debug Scale Factor (始终可见，独立于 FG 开关)
+            ImGui::Checkbox("Use Debug Scale Factor", &m_ui.FGSR_FG_UseDebugScaleFactor);
+            if (m_ui.FGSR_FG_UseDebugScaleFactor)
+            {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80);
+                int scaleIdx = (m_ui.FGSR_FG_DebugScaleFactor >= 4.0f) ? 2 : (m_ui.FGSR_FG_DebugScaleFactor >= 2.0f) ? 1 : 0;
+                if (ImGui::Combo("##FGSR_FG_DebugScale", &scaleIdx, "1x\0002x\0004x\0"))
+                {
+                    m_ui.FGSR_FG_DebugScaleFactor = (scaleIdx == 2) ? 4.0f : (scaleIdx == 1) ? 2.0f : 1.0f;
+                }
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Enable to use debug scale factor.\nDisable to auto-calculate from texture sizes.");
+
+            if (m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
+            {
+                // FPS target
+                ImGui::Text("Target FPS");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(100);
+                ImGui::InputInt("##FGSR_FG_FPS", &m_ui.FGSR_FG_FPS);
+                if (m_ui.FGSR_FG_FPS < 0) m_ui.FGSR_FG_FPS = 0;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Target FPS for frame generation\n0 = no frame rate limit");
+
+                // Delta
+                ImGui::Text("Blend Delta");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(150);
+                ImGui::SliderFloat("##FGSR_FG_Delta", &m_ui.FGSR_FG_Delta, 0.0f, 1.0f);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Blend delta parameter for frame interpolation");
+            }
+
+            if (! m_ui.FGSR_FG_Supported) popDisabled();
+            ImGui::Unindent();
+
+            if (ImGui::IsItemHovered()) m_ui.MouseOverUI = true;
+#endif
+
             //
             //  DeepDVC
             //

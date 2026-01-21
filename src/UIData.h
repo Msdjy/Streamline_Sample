@@ -259,6 +259,17 @@ public:
     sl::FGSR_UpsampleMode               FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eShader;
 #endif
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // FGSR_FG (Frame Generation) specific parameters
+    bool                                FGSR_FG_Supported = false;
+    sl::FGSR_FGMode                     FGSR_FG_Mode = sl::FGSR_FGMode::eOff;
+    int                                 FGSR_FG_FPS = 30;           // Target FPS for frame gen
+    float                               FGSR_FG_Delta = 0.5f;       // Blend delta parameter
+    // Debug: 独立的 scale factor，不使用时自动从 SR 或纹理尺寸获取
+    bool                                FGSR_FG_UseDebugScaleFactor = false;
+    float                               FGSR_FG_DebugScaleFactor = 1.0f;  // Debug scale factor (1.0, 2.0, 4.0)
+#endif
+
     // DeepDVC specific parameters
     bool                                DeepDVC_Supported = false;
     sl::DeepDVCMode                     DeepDVC_Mode = sl::DeepDVCMode::eOff;
