@@ -1592,6 +1592,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         // HDR 模式：和 DLSS 一样的位置，ToneMapping 之前，输入 HdrColor(HDR)
         if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.Global_UseHDRInput && !m_ui.DLSS_DebugShowFullRenderingBuffer) {
 
+            // 计时开始
+            using SRClock = std::chrono::high_resolution_clock;
+            auto srStart = SRClock::now();
+
             // FGSR_SR SETUP
             auto fgsr_sr_consts = sl::FGSR_SRConstants{};
 
@@ -1653,6 +1657,17 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                 m_RenderTargets->AAResolvedColor); // 输出 (displaySize, HDR) - 和 DLSS 一样
 
             NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+
+            // 计时结束 & 每秒打印
+            double srTimeMs = std::chrono::duration<double, std::milli>(SRClock::now() - srStart).count();
+            static struct { double accumMs = 0; int count = 0; SRClock::time_point lastLog = SRClock::now(); } s_srPerfHDR;
+            s_srPerfHDR.accumMs += srTimeMs;
+            s_srPerfHDR.count++;
+            if (std::chrono::duration<double>(SRClock::now() - s_srPerfHDR.lastLog).count() >= 1.0) {
+                donut::log::info("[Sample] FGSR_SR HDR: %.2fms (%d fps)", s_srPerfHDR.accumMs / s_srPerfHDR.count, s_srPerfHDR.count);
+                s_srPerfHDR.accumMs = 0; s_srPerfHDR.count = 0; s_srPerfHDR.lastLog = SRClock::now();
+            }
+
             m_PreviousViewsValid = true;
         }
         else if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff && m_ui.Global_UseHDRInput && m_ui.DLSS_DebugShowFullRenderingBuffer) {
@@ -1715,6 +1730,10 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             // Commit barriers after ToneMapping to ensure RenderLdrLinear is ready for reading
             m_CommandList->commitBarriers();
 
+            // 计时开始
+            using SRClock = std::chrono::high_resolution_clock;
+            auto srStart = SRClock::now();
+
             // FGSR_SR SETUP
             auto fgsr_sr_consts = sl::FGSR_SRConstants{};
 
@@ -1776,6 +1795,17 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
                 m_RenderTargets->AAResolvedColor); // 输出 (displaySize, LDR linear)
 
             NVWrapper::Get().EvaluateFGSR_SR(m_CommandList);
+
+            // 计时结束 & 每秒打印
+            double srTimeMs = std::chrono::duration<double, std::milli>(SRClock::now() - srStart).count();
+            static struct { double accumMs = 0; int count = 0; SRClock::time_point lastLog = SRClock::now(); } s_srPerfLDR;
+            s_srPerfLDR.accumMs += srTimeMs;
+            s_srPerfLDR.count++;
+            if (std::chrono::duration<double>(SRClock::now() - s_srPerfLDR.lastLog).count() >= 1.0) {
+                donut::log::info("[Sample] FGSR_SR LDR: %.2fms (%d fps)", s_srPerfLDR.accumMs / s_srPerfLDR.count, s_srPerfLDR.count);
+                s_srPerfLDR.accumMs = 0; s_srPerfLDR.count = 0; s_srPerfLDR.lastLog = SRClock::now();
+            }
+
             m_PreviousViewsValid = true;
         }
         else
