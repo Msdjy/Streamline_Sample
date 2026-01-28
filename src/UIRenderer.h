@@ -722,6 +722,18 @@ protected:
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Enable to include UI in frame generation.\nUI will be interpolated (may have artifacts).\nDisable for normal behavior (no UI in interpolated frames).");
 
+            // MockMV Mode
+            ImGui::Separator();
+            ImGui::Text("MockMV Mode");
+            const char* mockMVModeNames[] = { "Game MV Only", "MockMV Direct", "MockMV + TRT", "Color TRT (N/A)" };
+            int mockMVMode = static_cast<int>(m_ui.FGSR_FG_MockMVMode);
+            if (ImGui::Combo("##MockMVMode", &mockMVMode, mockMVModeNames, IM_ARRAYSIZE(mockMVModeNames)))
+            {
+                m_ui.FGSR_FG_MockMVMode = static_cast<sl::MockMVMode>(mockMVMode);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("0: Game MV Only - Original logic\n1: MockMV Direct - Copy MV as mockMV\n2: MockMV + TRT - MV downsample then TRT upsample\n3: Color TRT - Not implemented");
+
             if (m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
             {
                 // FPS target

@@ -1494,6 +1494,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_fg_consts.color_diff_threshold_fg = 0.01f;
         fgsr_fg_consts.bDynamicMask = false;
 
+        // MockMV Mode
+        fgsr_fg_consts.mockMVMode = m_ui.FGSR_FG_MockMVMode;
+
         NVWrapper::Get().SetFGSR_FGOptions(fgsr_fg_consts);
     }
 #endif
