@@ -1201,6 +1201,59 @@ static void GetSLResource(
     }
 }
 
+// 通用纹理信息记录 (用于所有 FGSR 功能)
+namespace {
+    struct TextureInfo {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        nvrhi::Format format = nvrhi::Format::UNKNOWN;
+        void Set(nvrhi::ITexture* tex) {
+            if (tex) {
+                auto& desc = tex->getDesc();
+                width = desc.width;
+                height = desc.height;
+                format = desc.format;
+            }
+        }
+    };
+
+    struct GeneralResourceStats {
+        TextureInfo depth;
+        TextureInfo motionVectors;
+        TextureInfo hudlessColor;
+        float tagCpuAccum = 0.0f;
+        int frameCount = 0;
+        std::chrono::steady_clock::time_point lastLogTime = std::chrono::steady_clock::now();
+        std::chrono::high_resolution_clock::time_point tagStartTime;
+    };
+    static GeneralResourceStats s_generalStats;
+
+    const char* nvrhiFormatToString(nvrhi::Format fmt) {
+        switch (fmt) {
+        case nvrhi::Format::RGBA8_UNORM: return "RGBA8_UNORM";
+        case nvrhi::Format::RGBA8_SNORM: return "RGBA8_SNORM";
+        case nvrhi::Format::BGRA8_UNORM: return "BGRA8_UNORM";
+        case nvrhi::Format::RGBA16_FLOAT: return "RGBA16F";
+        case nvrhi::Format::R11G11B10_FLOAT: return "R11G11B10F";
+        case nvrhi::Format::R32_FLOAT: return "R32F";
+        case nvrhi::Format::R16_FLOAT: return "R16F";
+        case nvrhi::Format::RG16_FLOAT: return "RG16F";
+        case nvrhi::Format::RG32_FLOAT: return "RG32F";
+        case nvrhi::Format::D16: return "D16";
+        case nvrhi::Format::D24S8: return "D24S8";
+        case nvrhi::Format::D32: return "D32";
+        case nvrhi::Format::D32S8: return "D32S8";
+        case nvrhi::Format::R8_UNORM: return "R8_UNORM";
+        case nvrhi::Format::RG8_UNORM: return "RG8_UNORM";
+        case nvrhi::Format::R16_UNORM: return "R16_UNORM";
+        case nvrhi::Format::RG16_UNORM: return "RG16_UNORM";
+        case nvrhi::Format::SRGBA8_UNORM: return "SRGBA8_UNORM";
+        case nvrhi::Format::SBGRA8_UNORM: return "SBGRA8_UNORM";
+        default: return "Unknown";
+        }
+    }
+}
+
 void SLWrapper::TagResources_General(
     nvrhi::ICommandList* commandList,
     const donut::engine::IView* view,
@@ -1212,6 +1265,14 @@ void SLWrapper::TagResources_General(
         log::warning("Streamline not initialised.");
         return;
     }
+
+    // CPU 计时开始
+    s_generalStats.tagStartTime = std::chrono::high_resolution_clock::now();
+
+    // 记录资源信息
+    s_generalStats.depth.Set(depth);
+    s_generalStats.motionVectors.Set(motionVectors);
+    s_generalStats.hudlessColor.Set(finalColorHudless);
 
     sl::Extent renderExtent{ 0, 0, depth->getDesc().width, depth->getDesc().height };
     sl::Extent fullExtent{ 0, 0, finalColorHudless->getDesc().width, finalColorHudless->getDesc().height };
@@ -1228,6 +1289,12 @@ void SLWrapper::TagResources_General(
 
     sl::ResourceTag inputs[] = {motionVectorsResourceTag, depthResourceTag, finalColorHudlessResourceTag };
     successCheck(SetTag(inputs, _countof(inputs), cmdbuffer), "slSetTag_General");
+
+    // CPU 计时结束
+    auto tagEnd = std::chrono::high_resolution_clock::now();
+    float tagMs = std::chrono::duration<float, std::milli>(tagEnd - s_generalStats.tagStartTime).count();
+    s_generalStats.tagCpuAccum += tagMs;
+    s_generalStats.frameCount++;
 
 }
 
@@ -1497,6 +1564,22 @@ void SLWrapper::EvaluateNIS(nvrhi::ICommandList* commandList) {
 }
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
+// FGSR_SR 统计信息 (每秒输出一次)
+namespace {
+    struct FGSR_SR_Stats {
+        // 资源信息 - 完整链路
+        TextureInfo inputColor;
+        TextureInfo outputColor;
+        // CPU timing
+        float tagCpuAccum = 0.0f;
+        float evalCpuAccum = 0.0f;
+        int frameCount = 0;
+        std::chrono::steady_clock::time_point lastLogTime = std::chrono::steady_clock::now();
+        std::chrono::high_resolution_clock::time_point tagStartTime;
+    };
+    static FGSR_SR_Stats s_fgsrSRStats;
+}
+
 void SLWrapper::TagResources_FGSR_SR(
     nvrhi::ICommandList* commandList,
     const donut::engine::IView* view,
@@ -1507,6 +1590,13 @@ void SLWrapper::TagResources_FGSR_SR(
         log::warning("Streamline not initialised.");
         return;
     }
+
+    // CPU 计时开始
+    s_fgsrSRStats.tagStartTime = std::chrono::high_resolution_clock::now();
+
+    // 记录资源信息
+    s_fgsrSRStats.inputColor.Set(input);
+    s_fgsrSRStats.outputColor.Set(output);
 
     sl::Extent renderExtent{ 0, 0, input->getDesc().width, input->getDesc().height };
     sl::Extent fullExtent{ 0, 0, output->getDesc().width, output->getDesc().height };
@@ -1522,6 +1612,11 @@ void SLWrapper::TagResources_FGSR_SR(
 
     sl::ResourceTag inputs[] = { inputResourceTag, outputResourceTag };
     successCheck(SetTag(inputs, _countof(inputs), cmdbuffer), "slSetTag_FGSR_SR");
+
+    // Tag CPU 计时
+    auto tagEnd = std::chrono::high_resolution_clock::now();
+    float tagMs = std::chrono::duration<float, std::milli>(tagEnd - s_fgsrSRStats.tagStartTime).count();
+    s_fgsrSRStats.tagCpuAccum += tagMs;
 }
 
 void SLWrapper::EvaluateFGSR_SR(nvrhi::ICommandList* commandList) {
@@ -1549,17 +1644,68 @@ void SLWrapper::EvaluateFGSR_SR(nvrhi::ICommandList* commandList) {
     }
 
     sl::ViewportHandle view(m_viewport);
-    const sl::BaseStructure* inputs[] = { &view };  // 只传 viewport，constants 已经通过 SetFGSR_SROptions 设置
+    const sl::BaseStructure* inputs[] = { &view };
 
-    char buf[128];
-    sprintf(buf, "Evaluate: viewport=%u, frame=%u", (uint32_t)m_viewport, (uint32_t)*m_currentFrame);
-    // // MessageBoxA(NULL, buf, "Debug - Evaluate", MB_OK);
+    // CPU 计时开始
+    auto cpuStart = std::chrono::high_resolution_clock::now();
 
     sl::Result evalRes = slEvaluateFeature(sl::kFeatureFGSR_SR, *m_currentFrame, inputs, _countof(inputs), nativeCommandList);
-    sprintf(buf, "slEvaluateFeature result: %d", (int)evalRes);
-    // MessageBoxA(NULL, buf, "Debug - Evaluate Result", MB_OK);
 
-    //Our pipeline is very simple so we can simply clear it, but normally state tracking should be implemented.
+    // CPU 计时结束
+    auto cpuEnd = std::chrono::high_resolution_clock::now();
+    float evalMs = std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count();
+
+    // 累积统计
+    s_fgsrSRStats.evalCpuAccum += evalMs;
+    s_fgsrSRStats.frameCount++;
+
+    // 每秒输出一次完整表格
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - s_fgsrSRStats.lastLogTime).count();
+    if (elapsed >= 1000) {
+        float avgGeneralTagMs = s_generalStats.tagCpuAccum / s_generalStats.frameCount;
+        float avgTagMs = s_fgsrSRStats.tagCpuAccum / s_fgsrSRStats.frameCount;
+        float avgEvalMs = s_fgsrSRStats.evalCpuAccum / s_fgsrSRStats.frameCount;
+        float fps = s_fgsrSRStats.frameCount * 1000.0f / elapsed;
+
+        log::info("");
+        log::info("[Sample FGSR_SR] ==================== Stats (%.1f fps) ====================", fps);
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_SR] | All Textures Passed to SDK (Complete Resource Chain)                   |");
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_SR] | From TagResources_General:                                              |");
+        log::info("[Sample FGSR_SR] |   Depth:          %4ux%-4u  %-20s                       |",
+            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format));
+        log::info("[Sample FGSR_SR] |   MotionVectors:  %4ux%-4u  %-20s                       |",
+            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format));
+        log::info("[Sample FGSR_SR] |   HudlessColor:   %4ux%-4u  %-20s                       |",
+            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format));
+        log::info("[Sample FGSR_SR] | From TagResources_FGSR_SR:                                              |");
+        log::info("[Sample FGSR_SR] |   InputColor:     %4ux%-4u  %-20s                       |",
+            s_fgsrSRStats.inputColor.width, s_fgsrSRStats.inputColor.height, nvrhiFormatToString(s_fgsrSRStats.inputColor.format));
+        log::info("[Sample FGSR_SR] |   OutputColor:    %4ux%-4u  %-20s                       |",
+            s_fgsrSRStats.outputColor.width, s_fgsrSRStats.outputColor.height, nvrhiFormatToString(s_fgsrSRStats.outputColor.format));
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_SR] | SDK Call CPU Timing (avg per frame)                                     |");
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_SR] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |", avgGeneralTagMs);
+        log::info("[Sample FGSR_SR] |   TagFGSR_SR:  %7.3f ms  (Input/Output Color)                          |", avgTagMs);
+        log::info("[Sample FGSR_SR] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |", avgEvalMs);
+        log::info("[Sample FGSR_SR] |   Total:       %7.3f ms                                                 |", avgGeneralTagMs + avgTagMs + avgEvalMs);
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_SR] | NOTE: GPU timing is inside SDK - see [SDK FGSR_SR] logs above           |");
+        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
+        log::info("");
+
+        // 重置统计
+        s_generalStats.tagCpuAccum = 0.0f;
+        s_generalStats.frameCount = 0;
+        s_fgsrSRStats.tagCpuAccum = 0.0f;
+        s_fgsrSRStats.evalCpuAccum = 0.0f;
+        s_fgsrSRStats.frameCount = 0;
+        s_fgsrSRStats.lastLogTime = now;
+    }
+
     commandList->clearState();
 
 }
@@ -1612,6 +1758,16 @@ void SLWrapper::SetFGSR_FGOptions(const sl::FGSR_FGConstants consts)
     }
 }
 
+// FGSR_FG 统计信息 (每秒输出一次)
+namespace {
+    struct FGSR_FG_Stats {
+        float evalCpuAccum = 0.0f;
+        int frameCount = 0;
+        std::chrono::steady_clock::time_point lastLogTime = std::chrono::steady_clock::now();
+    };
+    static FGSR_FG_Stats s_fgsrFGStats;
+}
+
 void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
 
     void* nativeCommandList = nullptr;
@@ -1639,9 +1795,56 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
     sl::ViewportHandle view(m_viewport);
     const sl::BaseStructure* inputs[] = { &view };
 
+    // CPU 计时开始
+    auto cpuStart = std::chrono::high_resolution_clock::now();
+
     sl::Result evalRes = slEvaluateFeature(sl::kFeatureFGSR_FG, *m_currentFrame, inputs, _countof(inputs), nativeCommandList);
+
+    // CPU 计时结束
+    auto cpuEnd = std::chrono::high_resolution_clock::now();
+    float cpuMs = std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count();
+
     if (evalRes != sl::Result::eOk) {
         log::warning("slEvaluateFeature FGSR_FG failed with result: %d", (int)evalRes);
+    }
+
+    // 累积统计
+    s_fgsrFGStats.evalCpuAccum += cpuMs;
+    s_fgsrFGStats.frameCount++;
+
+    // 每秒输出一次完整表格
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - s_fgsrFGStats.lastLogTime).count();
+    if (elapsed >= 1000) {
+        float avgGeneralTagMs = s_generalStats.frameCount > 0 ? s_generalStats.tagCpuAccum / s_generalStats.frameCount : 0.0f;
+        float avgCpuMs = s_fgsrFGStats.evalCpuAccum / s_fgsrFGStats.frameCount;
+        float fps = s_fgsrFGStats.frameCount * 1000.0f / elapsed;
+
+        log::info("");
+        log::info("[Sample FGSR_FG] ==================== Stats (%.1f fps) ====================", fps);
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_FG] | All Textures Passed to SDK (from TagResources_General)                 |");
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_FG] |   Depth:          %4ux%-4u  %-20s                       |",
+            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format));
+        log::info("[Sample FGSR_FG] |   MotionVectors:  %4ux%-4u  %-20s                       |",
+            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format));
+        log::info("[Sample FGSR_FG] |   HudlessColor:   %4ux%-4u  %-20s                       |",
+            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format));
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_FG] | SDK Call CPU Timing (avg per frame)                                     |");
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_FG] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |", avgGeneralTagMs);
+        log::info("[Sample FGSR_FG] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |", avgCpuMs);
+        log::info("[Sample FGSR_FG] |   Total:       %7.3f ms                                                 |", avgGeneralTagMs + avgCpuMs);
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("[Sample FGSR_FG] | NOTE: GPU timing is inside SDK - see [SDK FGSR_FG] logs above           |");
+        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
+        log::info("");
+
+        s_fgsrFGStats.evalCpuAccum = 0.0f;
+        s_fgsrFGStats.frameCount = 0;
+        s_fgsrFGStats.lastLogTime = now;
     }
 
     commandList->clearState();
