@@ -1668,34 +1668,38 @@ void SLWrapper::EvaluateFGSR_SR(nvrhi::ICommandList* commandList) {
         float avgEvalMs = s_fgsrSRStats.evalCpuAccum / s_fgsrSRStats.frameCount;
         float fps = s_fgsrSRStats.frameCount * 1000.0f / elapsed;
 
-        log::info("");
-        log::info("[Sample FGSR_SR] ==================== Stats (%.1f fps) ====================", fps);
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_SR] | All Textures Passed to SDK (Complete Resource Chain)                   |");
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_SR] | From TagResources_General:                                              |");
-        log::info("[Sample FGSR_SR] |   Depth:          %4ux%-4u  %-20s                       |",
-            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format));
-        log::info("[Sample FGSR_SR] |   MotionVectors:  %4ux%-4u  %-20s                       |",
-            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format));
-        log::info("[Sample FGSR_SR] |   HudlessColor:   %4ux%-4u  %-20s                       |",
-            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format));
-        log::info("[Sample FGSR_SR] | From TagResources_FGSR_SR:                                              |");
-        log::info("[Sample FGSR_SR] |   InputColor:     %4ux%-4u  %-20s                       |",
-            s_fgsrSRStats.inputColor.width, s_fgsrSRStats.inputColor.height, nvrhiFormatToString(s_fgsrSRStats.inputColor.format));
-        log::info("[Sample FGSR_SR] |   OutputColor:    %4ux%-4u  %-20s                       |",
-            s_fgsrSRStats.outputColor.width, s_fgsrSRStats.outputColor.height, nvrhiFormatToString(s_fgsrSRStats.outputColor.format));
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_SR] | SDK Call CPU Timing (avg per frame)                                     |");
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_SR] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |", avgGeneralTagMs);
-        log::info("[Sample FGSR_SR] |   TagFGSR_SR:  %7.3f ms  (Input/Output Color)                          |", avgTagMs);
-        log::info("[Sample FGSR_SR] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |", avgEvalMs);
-        log::info("[Sample FGSR_SR] |   Total:       %7.3f ms                                                 |", avgGeneralTagMs + avgTagMs + avgEvalMs);
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_SR] | NOTE: GPU timing is inside SDK - see [SDK FGSR_SR] logs above           |");
-        log::info("[Sample FGSR_SR] +-------------------------------------------------------------------------+");
-        log::info("");
+        // 合并所有日志为一条，避免丢失
+        log::info("\n[Sample FGSR_SR] ==================== Stats (%.1f fps) ====================\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_SR] | All Textures Passed to SDK (Complete Resource Chain)                   |\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_SR] | From TagResources_General:                                              |\n"
+            "[Sample FGSR_SR] |   Depth:          %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_SR] |   MotionVectors:  %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_SR] |   HudlessColor:   %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_SR] | From TagResources_FGSR_SR:                                              |\n"
+            "[Sample FGSR_SR] |   InputColor:     %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_SR] |   OutputColor:    %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_SR] | SDK Call CPU Timing (avg per frame)                                     |\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_SR] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |\n"
+            "[Sample FGSR_SR] |   TagFGSR_SR:  %7.3f ms  (Input/Output Color)                          |\n"
+            "[Sample FGSR_SR] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |\n"
+            "[Sample FGSR_SR] |   Total:       %7.3f ms                                                 |\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_SR] | NOTE: GPU timing is inside SDK - see [SDK FGSR_SR] logs above           |\n"
+            "[Sample FGSR_SR] +-------------------------------------------------------------------------+",
+            fps,
+            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format),
+            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format),
+            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format),
+            s_fgsrSRStats.inputColor.width, s_fgsrSRStats.inputColor.height, nvrhiFormatToString(s_fgsrSRStats.inputColor.format),
+            s_fgsrSRStats.outputColor.width, s_fgsrSRStats.outputColor.height, nvrhiFormatToString(s_fgsrSRStats.outputColor.format),
+            avgGeneralTagMs,
+            avgTagMs,
+            avgEvalMs,
+            avgGeneralTagMs + avgTagMs + avgEvalMs);
 
         // 重置统计
         s_generalStats.tagCpuAccum = 0.0f;
@@ -1820,27 +1824,30 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
         float avgCpuMs = s_fgsrFGStats.evalCpuAccum / s_fgsrFGStats.frameCount;
         float fps = s_fgsrFGStats.frameCount * 1000.0f / elapsed;
 
-        log::info("");
-        log::info("[Sample FGSR_FG] ==================== Stats (%.1f fps) ====================", fps);
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_FG] | All Textures Passed to SDK (from TagResources_General)                 |");
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_FG] |   Depth:          %4ux%-4u  %-20s                       |",
-            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format));
-        log::info("[Sample FGSR_FG] |   MotionVectors:  %4ux%-4u  %-20s                       |",
-            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format));
-        log::info("[Sample FGSR_FG] |   HudlessColor:   %4ux%-4u  %-20s                       |",
-            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format));
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_FG] | SDK Call CPU Timing (avg per frame)                                     |");
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_FG] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |", avgGeneralTagMs);
-        log::info("[Sample FGSR_FG] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |", avgCpuMs);
-        log::info("[Sample FGSR_FG] |   Total:       %7.3f ms                                                 |", avgGeneralTagMs + avgCpuMs);
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("[Sample FGSR_FG] | NOTE: GPU timing is inside SDK - see [SDK FGSR_FG] logs above           |");
-        log::info("[Sample FGSR_FG] +-------------------------------------------------------------------------+");
-        log::info("");
+        // 合并所有日志为一条，避免丢失
+        log::info("\n[Sample FGSR_FG] ==================== Stats (%.1f fps) ====================\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_FG] | All Textures Passed to SDK (from TagResources_General)                 |\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_FG] |   Depth:          %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_FG] |   MotionVectors:  %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_FG] |   HudlessColor:   %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_FG] | SDK Call CPU Timing (avg per frame)                                     |\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_FG] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |\n"
+            "[Sample FGSR_FG] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |\n"
+            "[Sample FGSR_FG] |   Total:       %7.3f ms                                                 |\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
+            "[Sample FGSR_FG] | NOTE: GPU timing is inside SDK - see [SDK FGSR_FG] logs above           |\n"
+            "[Sample FGSR_FG] +-------------------------------------------------------------------------+",
+            fps,
+            s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format),
+            s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format),
+            s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format),
+            avgGeneralTagMs,
+            avgCpuMs,
+            avgGeneralTagMs + avgCpuMs);
 
         s_fgsrFGStats.evalCpuAccum = 0.0f;
         s_fgsrFGStats.frameCount = 0;
