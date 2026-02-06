@@ -56,6 +56,7 @@ public:
     nvrhi::TextureHandle AmbientOcclusion;
     nvrhi::TextureHandle NisColor;
     nvrhi::TextureHandle PreUIColor;
+    nvrhi::TextureHandle UIColorAndAlpha; // UI texture with alpha for FGSR_FG AddUI
     nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR
     nvrhi::TextureHandle FGSR_SRInput;   // renderSize 8-bit LDR input for FGSR_SR
     nvrhi::TextureHandle RenderLdrLinear; // renderSize RGBA16F for 540p ToneMapping output (linear LDR)
@@ -76,6 +77,7 @@ public:
     std::shared_ptr<donut::engine::FramebufferFactory> LdrFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> AAResolvedFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> PreUIFramebuffer;
+    std::shared_ptr<donut::engine::FramebufferFactory> UIColorAndAlphaFramebuffer;  // Framebuffer for UI rendering to separate texture
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SROutputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> FGSR_SRInputFramebuffer;
     std::shared_ptr<donut::engine::FramebufferFactory> RenderLdrLinearFramebuffer; // 540p RGBA16F for LDR linear
@@ -228,6 +230,14 @@ public:
         desc.debugName = "PreUIColor";
         PreUIColor = device->createTexture(desc);
 
+        // UIColorAndAlpha: displaySize, same format as backbuffer for UI texture used by FGSR_FG AddUI
+        // Must be UAV for UI extraction compute shader output
+        desc.format = backbufferFormat;
+        desc.isUAV = true;
+        desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+        desc.debugName = "UIColorAndAlpha";
+        UIColorAndAlpha = device->createTexture(desc);
+
         // FGSR_SR requires R11G11B10_FLOAT format for historyColor copy
         desc.format = backbufferFormat;
         desc.isUAV = true;
@@ -250,6 +260,7 @@ public:
                 GBufferEmissiveRR,
                 ColorspaceCorrectionColor,
                 PreUIColor,
+                UIColorAndAlpha,  // UI texture for FGSR_FG AddUI
                 FGSR_SROutput,
                 FGSR_SRInput,
                 RenderLdrLinear,  // 540p LDR ToneMapping output - 必须在虚拟资源中绑定内存
@@ -303,6 +314,9 @@ public:
         PreUIFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         PreUIFramebuffer->RenderTargets = { PreUIColor };
 
+        UIColorAndAlphaFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
+        UIColorAndAlphaFramebuffer->RenderTargets = { UIColorAndAlpha };
+
         FGSR_SROutputFramebuffer = std::make_shared<donut::engine::FramebufferFactory>(device);
         FGSR_SROutputFramebuffer->RenderTargets = { FGSR_SROutput };
 
@@ -332,6 +346,7 @@ public:
         commandList->clearTextureFloat(LdrColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(NisColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(PreUIColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
+        commandList->clearTextureFloat(UIColorAndAlpha, nvrhi::AllSubresources, nvrhi::Color(0.f));  // Clear UI texture
         commandList->clearTextureFloat(FGSR_SROutput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(FGSR_SRInput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(RenderLdrLinear, nvrhi::AllSubresources, nvrhi::Color(0.f));  // 虚拟资源必须初始化

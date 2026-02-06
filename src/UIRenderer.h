@@ -114,17 +114,33 @@ public:
 
     virtual void Render(nvrhi::IFramebuffer* framebuffer) override
     {
-        // First, render UI normally
-        ImGui_Renderer::Render(framebuffer);
-
 #ifdef STREAMLINE_FEATURE_FGSR_FG
-        // After UI rendering, evaluate FGSR_FG if DebugWithUI is enabled
-        // At this point, framebuffer contains scene + UI
+        // Check if FGSR_FG needs UI texture for AddUI
+        if (m_app->IsFGSR_FGNeedingUITexture())
+        {
+            // Before UI render: backup current backbuffer (scene without UI)
+            m_app->BeforeUIRender(framebuffer);
+
+            // Render UI to backbuffer normally
+            ImGui_Renderer::Render(framebuffer);
+
+            // After UI render: call AddUI with the UI
+            m_app->AfterUIRender(framebuffer);
+            return;
+        }
+
+        // DebugWithUI mode: include UI in frame generation
         if (m_ui.FGSR_FG_DebugWithUI && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
         {
+            // First render UI to framebuffer normally
+            ImGui_Renderer::Render(framebuffer);
+            // Then evaluate FG with UI included
             m_app->EvaluateFGSR_FGWithUI(framebuffer);
+            return;
         }
 #endif
+        // Default: render UI directly to framebuffer
+        ImGui_Renderer::Render(framebuffer);
     }
 
 protected:

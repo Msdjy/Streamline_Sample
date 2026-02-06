@@ -604,6 +604,11 @@ public:
     bool GetFGSR_FGLastEnable() { return m_fgsr_fg_consts.mode != sl::FGSR_FGMode::eOff; }
     virtual void EvaluateFGSR_FG(nvrhi::ICommandList *commandList) = 0;
     virtual void CleanupFGSR_FG(bool wfi) = 0;
+    // Add UI texture to frame generation (similar to UE plugin's UI handling)
+    virtual void AddUI_FGSR_FG(
+        nvrhi::ICommandList *commandList,
+        const donut::engine::IView *view,
+        nvrhi::ITexture *uiColorAndAlpha) = 0;
 #endif
 
     virtual void SetDeepDVCOptions(const sl::DeepDVCOptions consts) = 0;

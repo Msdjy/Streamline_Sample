@@ -258,6 +258,20 @@ private:
     bool                                            m_FGSR_SR_Last_UseHDRInput = true;
 #endif
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    // UI Extraction compute shader for FGSR_FG AddUI (UE-style alpha threshold method)
+    nvrhi::ShaderHandle                             m_UIExtractionShader;
+    nvrhi::ComputePipelineHandle                    m_UIExtractionPipeline;
+    nvrhi::BindingLayoutHandle                      m_UIExtractionBindingLayout;
+    nvrhi::BufferHandle                             m_UIExtractionConstantBuffer;
+    bool                                            m_UIExtractionInitialized = false;
+
+    // Initialize UI extraction compute shader
+    void InitUIExtractionPass();
+    // Run UI extraction compute shader: backbuffer -> UIColorAndAlpha
+    void RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::ITexture* outputUI);
+#endif
+
 public:
     StreamlineSample(DeviceManager* deviceManager, sl::ViewportHandle vpHandle, UIData& ui, const std::string& sceneName, ScriptingConfig scriptingConfig);
     ~StreamlineSample();
@@ -295,6 +309,14 @@ public:
 #ifdef STREAMLINE_FEATURE_FGSR_FG
     // Called by UIRenderer after UI rendering when DebugWithUI is enabled
     void EvaluateFGSR_FGWithUI(nvrhi::IFramebuffer* framebuffer);
+
+    // UI texture support for FGSR_FG AddUI (UI Extraction approach)
+    // Before UI render: copy backbuffer to PreUIColor backup
+    void BeforeUIRender(nvrhi::IFramebuffer* backbufferFramebuffer);
+    // After UI render: extract UI by comparing backbuffer with PreUIColor, then call AddUI
+    void AfterUIRender(nvrhi::IFramebuffer* backbufferFramebuffer);
+    // Check if FGSR_FG needs UI texture for AddUI
+    bool IsFGSR_FGNeedingUITexture() const;
 #endif
 
 };

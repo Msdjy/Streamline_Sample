@@ -1876,6 +1876,78 @@ void SLWrapper::CleanupFGSR_FG(bool wfi) {
     // add an exception for eErrorMissingOrInvalidAPI for FGSR_FG plugin that doesn't export slFreeResources
     successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_FGSR_FG");
 }
+
+// Function pointer type for slFGSR_FGAddUI
+// chi::CommandList is void* in Streamline
+using PFun_slFGSR_FGAddUI = sl::Result(void* cmdList, uint32_t id, uint32_t frame, const sl::BaseStructure** inputs, uint32_t numInputs);
+static PFun_slFGSR_FGAddUI* s_slFGSR_FGAddUI = nullptr;
+
+void SLWrapper::AddUI_FGSR_FG(
+    nvrhi::ICommandList* commandList,
+    const donut::engine::IView* view,
+    nvrhi::ITexture* uiColorAndAlpha)
+{
+    if (!m_sl_initialised || !m_fgsr_fg_available) {
+        return;
+    }
+
+    if (!uiColorAndAlpha) {
+        log::warning("FGSR_FG AddUI: uiColorAndAlpha texture is null");
+        return;
+    }
+
+    // Get function pointer if not cached
+    if (!s_slFGSR_FGAddUI) {
+        sl::Result res = slGetFeatureFunction(sl::kFeatureFGSR_FG, "slFGSR_FGAddUI", (void*&)s_slFGSR_FGAddUI);
+        if (res != sl::Result::eOk || !s_slFGSR_FGAddUI) {
+            log::warning("Failed to get slFGSR_FGAddUI function pointer");
+            return;
+        }
+    }
+
+    void* nativeCommandList = nullptr;
+
+#if DONUT_WITH_DX11
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D11)
+        nativeCommandList = m_Device->getNativeObject(nvrhi::ObjectTypes::D3D11_DeviceContext);
+#endif
+
+#if DONUT_WITH_DX12
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::D3D12)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+#endif
+
+#if DONUT_WITH_VULKAN
+    if (m_Device->getGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+        nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::VK_CommandBuffer);
+#endif
+
+    if (nativeCommandList == nullptr) {
+        log::warning("Failed to retrieve context for FGSR_FG AddUI.");
+        return;
+    }
+
+    // Tag UI texture
+    sl::Resource uiResource{};
+    GetSLResource(commandList, uiResource, uiColorAndAlpha, view);
+
+    sl::Extent uiExtent{ 0, 0, uiColorAndAlpha->getDesc().width, uiColorAndAlpha->getDesc().height };
+    sl::ResourceTag uiResourceTag = sl::ResourceTag{ &uiResource, sl::kBufferTypeUIColorAndAlpha, sl::ResourceLifecycle::eValidUntilPresent, &uiExtent };
+
+    sl::ResourceTag inputs[] = { uiResourceTag };
+    successCheck(SetTag(inputs, _countof(inputs), nativeCommandList), "slSetTag_FGSR_FG_UI");
+
+    // Call slFGSR_FGAddUI
+    sl::ViewportHandle viewHandle(m_viewport);
+    const sl::BaseStructure* slInputs[] = { &viewHandle };
+
+    sl::Result callRes = s_slFGSR_FGAddUI(nativeCommandList, (uint32_t)m_viewport, *m_currentFrame, slInputs, _countof(slInputs));
+    if (callRes != sl::Result::eOk) {
+        log::warning("slFGSR_FGAddUI failed with result: %d", (int)callRes);
+    }
+
+    commandList->clearState();
+}
 #endif
 
 void SLWrapper::EvaluateDeepDVC(nvrhi::ICommandList* commandList) {

@@ -183,6 +183,10 @@ public:
     void SetFGSR_FGOptions(const sl::FGSR_FGConstants consts) override;
     void EvaluateFGSR_FG(nvrhi::ICommandList* commandList) override;
     void CleanupFGSR_FG(bool wfi) override;
+    void AddUI_FGSR_FG(
+        nvrhi::ICommandList* commandList,
+        const donut::engine::IView* view,
+        nvrhi::ITexture* uiColorAndAlpha) override;
 #endif
 
     void SetDeepDVCOptions(const sl::DeepDVCOptions consts) override;
