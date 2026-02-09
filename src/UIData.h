@@ -268,8 +268,6 @@ public:
     // Debug: 独立的 scale factor，不使用时自动从 SR 或纹理尺寸获取
     bool                                FGSR_FG_UseDebugScaleFactor = false;
     float                               FGSR_FG_DebugScaleFactor = 1.0f;  // Debug scale factor (1.0, 2.0, 4.0)
-    // Debug: 带 UI 插帧（在 UI 渲染后执行 FG，UI 也会被插值）
-    bool                                FGSR_FG_DebugWithUI = true;
     // MockMV 模式
     sl::MockMVMode                      FGSR_FG_MockMVMode = sl::MockMVMode::eMockMVTRT;
 #endif

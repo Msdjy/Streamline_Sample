@@ -1883,8 +1883,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     // FGSR_FG Evaluate - generates interpolated frame to ctx.debugTemp
     // Must be called AFTER PreUIColor is filled (BlitTexture above)
     // Hook Present will then display the interpolated frame before the original frame
-    // Skip if DebugWithUI is enabled - will be evaluated in UIRenderer after UI rendering
-    if (NVWrapper::Get().GetFGSR_FGAvailable() && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff && !m_ui.FGSR_FG_DebugWithUI)
+    if (NVWrapper::Get().GetFGSR_FGAvailable() && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
     {
         // Re-tag HUDLessColor with the now-filled PreUIColor
         nvrhi::ITexture* depthToTag = m_ui.Global_UseUnjitteredPass
@@ -2046,39 +2045,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 }
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG
-void StreamlineSample::EvaluateFGSR_FGWithUI(nvrhi::IFramebuffer* framebuffer)
-{
-    // Called by UIRenderer after UI rendering when DebugWithUI is enabled
-    // At this point, framebuffer contains the scene + UI
-    if (!NVWrapper::Get().GetFGSR_FGAvailable() || m_ui.FGSR_FG_Mode == sl::FGSR_FGMode::eOff || !m_ui.FGSR_FG_DebugWithUI)
-        return;
-
-    // Get the framebuffer texture (with UI)
-    nvrhi::ITexture* framebufferTexture = framebuffer->getDesc().colorAttachments[0].texture;
-
-    // Create command list for FG evaluation
-    m_CommandList->open();
-
-    // Tag resources - use framebuffer (with UI) as HUDLessColor
-    nvrhi::ITexture* depthToTag = m_ui.Global_UseUnjitteredPass
-        ? m_RenderTargets->UnjitteredDepth
-        : m_RenderTargets->Depth;
-    nvrhi::ITexture* mvToTag = m_ui.Global_UseUnjitteredPass
-        ? m_RenderTargets->UnjitteredMV
-        : m_RenderTargets->MotionVectors;
-
-    NVWrapper::Get().TagResources_General(m_CommandList,
-        m_View->GetChildView(ViewType::PLANAR, 0),
-        mvToTag,
-        depthToTag,
-        framebufferTexture);  // Use framebuffer with UI instead of PreUIColor
-
-    NVWrapper::Get().EvaluateFGSR_FG(m_CommandList);
-
-    m_CommandList->close();
-    GetDevice()->executeCommandList(m_CommandList);
-}
-
 // UI Extraction constant buffer structure (must match ui_extraction.hlsl)
 struct UIExtractionConstants
 {
@@ -2214,12 +2180,8 @@ void StreamlineSample::AfterUIRender(nvrhi::IFramebuffer* backbufferFramebuffer)
 
 bool StreamlineSample::IsFGSR_FGNeedingUITexture() const
 {
-    // Returns true when FGSR_FG is active and not in DebugWithUI mode
-    // In DebugWithUI mode, UI is included directly in the interpolated frame (old behavior)
-    // In normal mode, we need separate UI texture for AddUI call
     return NVWrapper::Get().GetFGSR_FGAvailable() &&
-           m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff &&
-           !m_ui.FGSR_FG_DebugWithUI;
+           m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff;
 }
 #endif
 

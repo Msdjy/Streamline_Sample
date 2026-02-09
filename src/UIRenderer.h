@@ -129,15 +129,6 @@ public:
             return;
         }
 
-        // DebugWithUI mode: include UI in frame generation
-        if (m_ui.FGSR_FG_DebugWithUI && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
-        {
-            // First render UI to framebuffer normally
-            ImGui_Renderer::Render(framebuffer);
-            // Then evaluate FG with UI included
-            m_app->EvaluateFGSR_FGWithUI(framebuffer);
-            return;
-        }
 #endif
         // Default: render UI directly to framebuffer
         ImGui_Renderer::Render(framebuffer);
@@ -732,11 +723,6 @@ protected:
             }
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Enable to use debug scale factor.\nDisable to auto-calculate from texture sizes.");
-
-            // Debug With UI checkbox
-            ImGui::Checkbox("Debug With UI", &m_ui.FGSR_FG_DebugWithUI);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Enable to include UI in frame generation.\nUI will be interpolated (may have artifacts).\nDisable for normal behavior (no UI in interpolated frames).");
 
             // MockMV Mode
             ImGui::Separator();

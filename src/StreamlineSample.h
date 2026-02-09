@@ -307,9 +307,6 @@ public:
     virtual void RenderSplashScreen(nvrhi::IFramebuffer* framebuffer) override;
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG
-    // Called by UIRenderer after UI rendering when DebugWithUI is enabled
-    void EvaluateFGSR_FGWithUI(nvrhi::IFramebuffer* framebuffer);
-
     // UI texture support for FGSR_FG AddUI (UI Extraction approach)
     // Before UI render: copy backbuffer to PreUIColor backup
     void BeforeUIRender(nvrhi::IFramebuffer* backbufferFramebuffer);
