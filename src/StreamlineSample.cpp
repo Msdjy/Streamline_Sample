@@ -2084,7 +2084,7 @@ struct UIExtractionConstants
 {
     uint32_t width;
     uint32_t height;
-    float alphaThreshold;
+    float colorDiffThreshold;
     float padding;
 };
 
@@ -2102,13 +2102,15 @@ void StreamlineSample::InitUIExtractionPass()
     }
 
     // Create binding layout
-    // t0: Backbuffer (SRV)
+    // t0: Backbuffer with UI (SRV)
+    // t1: PreUIColor without UI (SRV)
     // u0: Output UI texture (UAV)
     // b0: Constants
     nvrhi::BindingLayoutDesc layoutDesc;
     layoutDesc.visibility = nvrhi::ShaderType::Compute;
     layoutDesc.bindings = {
-        nvrhi::BindingLayoutItem::Texture_SRV(0),      // t0: Backbuffer
+        nvrhi::BindingLayoutItem::Texture_SRV(0),      // t0: Backbuffer (with UI)
+        nvrhi::BindingLayoutItem::Texture_SRV(1),      // t1: PreUIColor (without UI)
         nvrhi::BindingLayoutItem::Texture_UAV(0),      // u0: Output UI
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)  // b0: Constants
     };
@@ -2133,7 +2135,7 @@ void StreamlineSample::InitUIExtractionPass()
     log::info("UI Extraction compute shader initialized");
 }
 
-void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::ITexture* outputUI)
+void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::ITexture* preUIColor, nvrhi::ITexture* outputUI)
 {
     if (!m_UIExtractionInitialized)
     {
@@ -2150,14 +2152,15 @@ void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::IText
     UIExtractionConstants constants;
     constants.width = width;
     constants.height = height;
-    constants.alphaThreshold = 0.0f;  // UE uses 0.0f threshold
+    constants.colorDiffThreshold = 1.0f / 255.0f;  // ~1 color level difference to detect UI
     constants.padding = 0.0f;
     m_CommandList->writeBuffer(m_UIExtractionConstantBuffer, &constants, sizeof(constants));
 
     // Create binding set for this dispatch
     nvrhi::BindingSetDesc bindingSetDesc;
     bindingSetDesc.bindings = {
-        nvrhi::BindingSetItem::Texture_SRV(0, backbuffer),
+        nvrhi::BindingSetItem::Texture_SRV(0, backbuffer),     // t0: with UI
+        nvrhi::BindingSetItem::Texture_SRV(1, preUIColor),     // t1: without UI
         nvrhi::BindingSetItem::Texture_UAV(0, outputUI),
         nvrhi::BindingSetItem::ConstantBuffer(0, m_UIExtractionConstantBuffer)
     };
@@ -2177,11 +2180,8 @@ void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::IText
 
 void StreamlineSample::BeforeUIRender(nvrhi::IFramebuffer* backbufferFramebuffer)
 {
-    // UE-style alpha threshold method doesn't need scene backup
-    // The method relies on:
-    // - Scene pixels having alpha = 0
-    // - UI pixels having alpha > 0
-    // So we just need to run UI extraction after UI renders
+    // No-op: diff-based UI extraction compares backbuffer (with UI) against PreUIColor (without UI)
+    // to detect UI pixels, so no alpha channel preparation is needed.
     (void)backbufferFramebuffer;
 }
 
@@ -2198,10 +2198,9 @@ void StreamlineSample::AfterUIRender(nvrhi::IFramebuffer* backbufferFramebuffer)
     {
         m_CommandList->open();
 
-        // UE-style: Run UI extraction compute shader
-        // Input: backbuffer (scene + UI, where UI pixels have alpha > 0)
-        // Output: UIColorAndAlpha (only UI pixels, non-UI is transparent)
-        RunUIExtraction(backbufferTexture, m_RenderTargets->UIColorAndAlpha);
+        // Diff-based UI extraction: compare backbuffer (scene + UI) vs PreUIColor (scene only)
+        // Pixels that differ are UI; pixels that match are scene (output transparent)
+        RunUIExtraction(backbufferTexture, m_RenderTargets->PreUIColor, m_RenderTargets->UIColorAndAlpha);
 
         // Call AddUI with the extracted UI texture
         NVWrapper::Get().AddUI_FGSR_FG(m_CommandList,

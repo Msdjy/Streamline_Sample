@@ -268,8 +268,8 @@ private:
 
     // Initialize UI extraction compute shader
     void InitUIExtractionPass();
-    // Run UI extraction compute shader: backbuffer -> UIColorAndAlpha
-    void RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::ITexture* outputUI);
+    // Run UI extraction compute shader: diff backbuffer vs preUIColor -> UIColorAndAlpha
+    void RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::ITexture* preUIColor, nvrhi::ITexture* outputUI);
 #endif
 
 public:

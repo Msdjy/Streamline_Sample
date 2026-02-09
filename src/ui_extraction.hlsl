@@ -1,14 +1,16 @@
 // UI Extraction Compute Shader
-// UE-style alpha threshold method: extract UI pixels based on backbuffer alpha
-// Assumes: scene pixels have alpha = 0, UI pixels have alpha > 0
+// Diff-based method: detect UI pixels by comparing backbuffer (with UI) against PreUIColor (without UI).
+// This avoids depending on alpha channel, which is unreliable due to ImGui's blend state
+// writing alpha=0 for fully opaque UI (srcBlendAlpha=InvSrcAlpha, destBlendAlpha=Zero).
 
-Texture2D<float4> t_Backbuffer : register(t0);      // Backbuffer after UI rendering
+Texture2D<float4> t_Backbuffer : register(t0);      // Backbuffer after UI rendering (scene + UI)
+Texture2D<float4> t_PreUIColor : register(t1);       // Scene without UI (PreUIColor)
 RWTexture2D<float4> u_ExtractedUI : register(u0);   // Output: extracted UI with alpha
 
 cbuffer Constants : register(b0)
 {
     uint2 dimensions;
-    float alphaThreshold;  // Threshold for alpha detection (typically 0.0)
+    float colorDiffThreshold;  // RGB difference threshold for UI detection
     float padding;
 };
 
@@ -20,15 +22,21 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     uint2 pixelPos = DTid.xy;
 
-    float4 colorAlpha = t_Backbuffer[pixelPos];
+    float4 withUI = t_Backbuffer[pixelPos];
+    float4 withoutUI = t_PreUIColor[pixelPos];
 
-    // UE method: if alpha > threshold, this is UI pixel, keep it; otherwise transparent
-    if (colorAlpha.a > alphaThreshold)
+    // Detect UI by RGB difference between backbuffer (with UI) and PreUIColor (without UI)
+    float3 diff = abs(withUI.rgb - withoutUI.rgb);
+    float maxDiff = max(diff.r, max(diff.g, diff.b));
+
+    if (maxDiff > colorDiffThreshold)
     {
-        u_ExtractedUI[pixelPos] = colorAlpha;
+        // This pixel was modified by UI rendering - extract it with full opacity
+        u_ExtractedUI[pixelPos] = float4(withUI.rgb, 1.0);
     }
     else
     {
+        // No UI here - output transparent
         u_ExtractedUI[pixelPos] = float4(0.0, 0.0, 0.0, 0.0);
     }
 }
