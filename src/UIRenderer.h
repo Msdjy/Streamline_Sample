@@ -670,21 +670,6 @@ protected:
             ImGui::Combo("##FGSR_FGMode", &fgsr_fg_mode, "Off\0On\0");
             m_ui.FGSR_FG_Mode = (fgsr_fg_mode == 1) ? sl::FGSR_FGMode::eOn : sl::FGSR_FGMode::eOff;
 
-            // Debug Scale Factor (始终可见，独立于 FG 开关)
-            ImGui::Checkbox("Use Debug Scale Factor", &m_ui.FGSR_FG_UseDebugScaleFactor);
-            if (m_ui.FGSR_FG_UseDebugScaleFactor)
-            {
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(80);
-                int scaleIdx = (m_ui.FGSR_FG_DebugScaleFactor >= 4.0f) ? 2 : (m_ui.FGSR_FG_DebugScaleFactor >= 2.0f) ? 1 : 0;
-                if (ImGui::Combo("##FGSR_FG_DebugScale", &scaleIdx, "1x\0002x\0004x\0"))
-                {
-                    m_ui.FGSR_FG_DebugScaleFactor = (scaleIdx == 2) ? 4.0f : (scaleIdx == 1) ? 2.0f : 1.0f;
-                }
-            }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Enable to use debug scale factor.\nDisable to auto-calculate from texture sizes.");
-
             // MockMV Mode
             ImGui::Separator();
             ImGui::Text("MockMV Mode");

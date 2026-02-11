@@ -1172,15 +1172,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
 
-#ifdef STREAMLINE_FEATURE_FGSR_FG
-    // FG Debug Scale Factor: 单独控制渲染分辨率（用于 FG 单独测试）
-    if (m_ui.FGSR_FG_UseDebugScaleFactor && m_ui.FGSR_FG_DebugScaleFactor > 1.0f)
-    {
-        int scaleFactor = (int)m_ui.FGSR_FG_DebugScaleFactor;
-        m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
-                                m_DisplaySize.y / scaleFactor };
-    }
-#endif // STREAMLINE_FEATURE_FGSR_FG
 
     // PASS SETUP
     {
@@ -1466,18 +1457,6 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         fgsr_fg_consts.mode = m_ui.FGSR_FG_Mode;
         fgsr_fg_consts.FPS = m_ui.FGSR_FG_FPS;
         fgsr_fg_consts.delta = m_ui.FGSR_FG_Delta;
-
-        // Scale factor: 使用 debug 值或自动计算
-        if (m_ui.FGSR_FG_UseDebugScaleFactor)
-        {
-            fgsr_fg_consts.upsample_factor = m_ui.FGSR_FG_DebugScaleFactor;
-        }
-        else
-        {
-            // 自动计算: color(PreUIColor) / depth 的比例
-            // PreUIColor = m_DisplaySize, Depth = m_RenderingRectSize
-            fgsr_fg_consts.upsample_factor = (float)m_DisplaySize.x / (float)m_RenderingRectSize.x;
-        }
 
         // Camera matrix for world space distance calculation (same as UE plugin)
         dm::float4x4 fgViewMatrix = affineToHomogeneous(m_FirstPersonCamera.GetWorldToViewMatrix());
