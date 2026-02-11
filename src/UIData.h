@@ -233,21 +233,11 @@ public:
     int                                 FGSR_SR_ScaleFactor = 2;      // 放大倍率: 1=1x, 2=2x, 4=4x
 
     // DLSS对齐选项
-    bool                                FGSR_SR_UseLodBias = true;    // 使用和DLSS一样的LOD Bias
     // UseHDRInput 已移到 Global_UseHDRInput
 
     // Blend 选项
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
     int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
-
-    // Jitter Fix 选项
-    bool                                FGSR_SR_UseDepthMVJitterFix = false;      // Depth/MV Jitter 修复 (当前帧+历史帧)
-    bool                                FGSR_SR_DoJitterFixBeforeUp = false;      // Color 上采样前修复 (JitterResample)
-    bool                                FGSR_SR_UseColorJitterFix = true;         // Color 在 Blend 内部修复
-
-    // EveryFrameUpsampleBlend 模式的步骤开关
-    bool                                FGSR_SR_DoUpsample = true;
-    bool                                FGSR_SR_DoBlend = true;
 
     // 2x 模型选择
     bool                                FGSR_SR_UseOur2xModel = false;  // false=原版, true=我们的

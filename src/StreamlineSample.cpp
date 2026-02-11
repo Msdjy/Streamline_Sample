@@ -1165,12 +1165,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         {
             m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
                                     m_DisplaySize.y / scaleFactor };
-            // LOD Bias 开关：和 DLSS 一样设置 LOD Bias，确保纹理采样的 mipmap 级别一致
-            if (m_ui.FGSR_SR_UseLodBias)
-            {
-                float texLodXDimension = (float)m_RenderingRectSize.x;
-                lodBias = std::log2f(texLodXDimension / m_DisplaySize.x) - 1;
-            }
+            // LOD Bias：和 DLSS 一样设置 LOD Bias，确保纹理采样的 mipmap 级别一致
+            float texLodXDimension = (float)m_RenderingRectSize.x;
+            lodBias = std::log2f(texLodXDimension / m_DisplaySize.x) - 1;
         }
     }
 #endif // STREAMLINE_FEATURE_FGSR_SR
@@ -1622,18 +1619,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             fgsr_sr_consts.depth_diff_threshold = 0.003f;
             fgsr_sr_consts.maxFlowWeight = 0.01f;
 
-            // EveryFrameUpsampleBlend 模式的步骤开关
-            fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
-            fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
-            fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
-
             // Blend 选项
             fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
             fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
-
-            // Jitter Fix 选项
-            fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;
-            fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
 
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
@@ -1760,18 +1748,9 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             fgsr_sr_consts.depth_diff_threshold = 0.003f;
             fgsr_sr_consts.maxFlowWeight = 0.01f;
 
-            // EveryFrameUpsampleBlend 模式的步骤开关
-            fgsr_sr_consts.doUpsample = m_ui.FGSR_SR_DoUpsample ? 1 : 0;
-            fgsr_sr_consts.doBlend = m_ui.FGSR_SR_DoBlend ? 1 : 0;
-            fgsr_sr_consts.doJitterFixBeforeUp = m_ui.FGSR_SR_DoJitterFixBeforeUp ? 1 : 0;
-
             // Blend 选项
             fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
             fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
-
-            // Jitter Fix 选项
-            fgsr_sr_consts.useDepthMVJitterFix = m_ui.FGSR_SR_UseDepthMVJitterFix ? 1 : 0;
-            fgsr_sr_consts.useColorJitterFix = m_ui.FGSR_SR_UseColorJitterFix ? 1 : 0;
 
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;

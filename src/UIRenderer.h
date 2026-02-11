@@ -566,9 +566,9 @@ protected:
             ImGui::SameLine();
             if (! m_ui.FGSR_SR_Supported) pushDisabled();
 
-            // 主模式: Off / First Frame Upsample+Blend / Every Frame Upsample+Blend
+            // 主模式: Off / Every Frame Upsample+Blend
             ImGui::Combo("##FGSR_SRMode", reinterpret_cast<int*>(&m_ui.FGSR_SR_Mode),
-                "Off\0First Frame Upsample+Blend\0Every Frame Upsample+Blend\0");
+                "Off\0Every Frame Upsample+Blend\0");
 
             if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
             {
@@ -614,30 +614,7 @@ protected:
                     }
                 }
 
-                // ========== DLSS对齐选项 ==========
-                ImGui::Separator();
-                ImGui::Text("DLSS Alignment");
-
-                ImGui::Checkbox("Use LOD Bias", &m_ui.FGSR_SR_UseLodBias);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Use same LOD bias as DLSS for texture sampling");
                 // HDR Input 已移到 Global 区域
-
-                // ========== EveryFrameUpsampleBlend 模式的步骤开关 ==========
-                if (m_ui.FGSR_SR_Mode == sl::FGSR_SRMode::eEveryFrameUpsampleBlend)
-                {
-                    ImGui::Separator();
-                    ImGui::Text("Pipeline Steps");
-
-                    ImGui::Checkbox("Upsample", &m_ui.FGSR_SR_DoUpsample);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Execute upsampling step");
-
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Blend", &m_ui.FGSR_SR_DoBlend);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Execute temporal blend step");
-                }
 
                 // ========== Blend 选项 ==========
                 ImGui::Separator();
@@ -646,30 +623,14 @@ protected:
                     ImGui::SetTooltip("Enable new blend shader logic (adapts to high-res input)");
 
                 // ========== Jitter Fix 选项 ==========
-                ImGui::Separator();
-                ImGui::Text("Jitter Fix");
-
-                ImGui::Checkbox("Depth/MV Jitter Fix", &m_ui.FGSR_SR_UseDepthMVJitterFix);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Fix Depth/MV sampling jitter:\n- Current MV/Depth: use jitteredUV\n- History Depth: use prevJitterOffset");
-
-                ImGui::Checkbox("Color Before Upsample", &m_ui.FGSR_SR_DoJitterFixBeforeUp);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Apply JitterResample pass before upsampling (low-res)");
-
-                ImGui::SameLine();
-                ImGui::Checkbox("Color In Blend", &m_ui.FGSR_SR_UseColorJitterFix);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Do color jitter fix inside blend shader");
-
                 // ========== Debug 选项 ==========
                 ImGui::Separator();
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
-                    "Normal\0Color\0MV\0Depth\0SimpleBlend\0NoClamp\0NoDepthChk\0");
+                    "Normal\0Color\0MV\0Depth\0");
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV, 3=Depth\n4=SimpleBlend(uv+固定权重)\n5=NoClamp(跳过AABB clamp)\n6=NoDepthChk(跳过depth检查)");
+                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV, 3=Depth");
             }
 
             // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)
