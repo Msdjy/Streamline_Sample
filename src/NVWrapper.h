@@ -591,7 +591,15 @@ public:
         const donut::engine::IView *view,
         nvrhi::ITexture *input,
         nvrhi::ITexture *output) = 0;
+    struct FGSR_SRSettings
+    {
+        donut::math::int2 optimalRenderSize;
+        donut::math::int2 minRenderSize;
+        donut::math::int2 maxRenderSize;
+    };
+
     virtual void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) = 0;
+    virtual void QueryFGSR_SROptimalSettings(FGSR_SRSettings& settings) = 0;
     bool GetFGSR_SRAvailable() { return m_fgsr_sr_available; }
     bool GetFGSR_SRLastEnable() { return m_fgsr_sr_consts.mode != sl::FGSR_SRMode::eOff; }
     virtual void EvaluateFGSR_SR(nvrhi::ICommandList *commandList) = 0;

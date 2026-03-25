@@ -1157,14 +1157,33 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // If FGSR_SR is enabled, set render size and optionally LOD bias
+    // If FGSR_SR is enabled, query optimal render size from SDK (aligned with DLSS GetOptimalSettings pattern)
     if (m_ui.FGSR_SR_Mode != sl::FGSR_SRMode::eOff)
     {
         int scaleFactor = m_ui.FGSR_SR_ScaleFactor;
         if (scaleFactor > 1)
         {
-            m_RenderingRectSize = { m_DisplaySize.x / scaleFactor,
-                                    m_DisplaySize.y / scaleFactor };
+            // Set minimal constants for the query (like DLSS SetDLSSOptions before QueryDLSSOptimalSettings)
+            sl::FGSR_SRConstants fgsr_sr_consts = {};
+            fgsr_sr_consts.mode = m_ui.FGSR_SR_Mode;
+            fgsr_sr_consts.scaleFactor = scaleFactor;
+            fgsr_sr_consts.presentationExtents = { (float)m_DisplaySize.x, (float)m_DisplaySize.y };
+            NVWrapper::Get().SetFGSR_SROptions(fgsr_sr_consts);
+
+            // Query optimal render resolution
+            NVWrapper::FGSR_SRSettings fgsrSettings = {};
+            NVWrapper::Get().QueryFGSR_SROptimalSettings(fgsrSettings);
+
+            if (fgsrSettings.optimalRenderSize.x <= 0 || fgsrSettings.optimalRenderSize.y <= 0)
+            {
+                m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eOff;
+                m_RenderingRectSize = m_DisplaySize;
+            }
+            else
+            {
+                m_RenderingRectSize = fgsrSettings.optimalRenderSize;
+            }
+
             // LOD Bias：和 DLSS 一样设置 LOD Bias，确保纹理采样的 mipmap 级别一致
             float texLodXDimension = (float)m_RenderingRectSize.x;
             lodBias = std::log2f(texLodXDimension / m_DisplaySize.x) - 1;

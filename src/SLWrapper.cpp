@@ -771,6 +771,25 @@ void SLWrapper::SetFGSR_SROptions(const sl::FGSR_SRConstants consts)
     sprintf(buf, "s_slSetFGSR_SRConstants result: %d", (int)callRes);
     // // MessageBoxA(NULL, buf, "Debug", MB_OK);
 }
+
+void SLWrapper::QueryFGSR_SROptimalSettings(FGSR_SRSettings& settings) {
+    if (!m_sl_initialised || !m_fgsr_sr_available) {
+        log::warning("SL not initialised or FGSR_SR not available.");
+        settings = FGSR_SRSettings{};
+        return;
+    }
+
+    sl::FGSR_SROptimalSettings fgsrOptimal = {};
+    successCheck(slFGSR_SRGetOptimalSettings(m_fgsr_sr_consts, fgsrOptimal), "slFGSR_SRGetOptimalSettings");
+
+    settings.optimalRenderSize.x = static_cast<int>(fgsrOptimal.optimalRenderWidth);
+    settings.optimalRenderSize.y = static_cast<int>(fgsrOptimal.optimalRenderHeight);
+
+    settings.minRenderSize.x = fgsrOptimal.renderWidthMin;
+    settings.minRenderSize.y = fgsrOptimal.renderHeightMin;
+    settings.maxRenderSize.x = fgsrOptimal.renderWidthMax;
+    settings.maxRenderSize.y = fgsrOptimal.renderHeightMax;
+}
 #endif
 
 void SLWrapper::SetDeepDVCOptions(const sl::DeepDVCOptions consts)

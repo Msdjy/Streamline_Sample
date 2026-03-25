@@ -175,6 +175,7 @@ public:
         nvrhi::ITexture* input,
         nvrhi::ITexture* output) override;
     void SetFGSR_SROptions(const sl::FGSR_SRConstants consts) override;
+    void QueryFGSR_SROptimalSettings(FGSR_SRSettings& settings) override;
     void EvaluateFGSR_SR(nvrhi::ICommandList* commandList) override;
     void CleanupFGSR_SR(bool wfi) override;
 #endif
