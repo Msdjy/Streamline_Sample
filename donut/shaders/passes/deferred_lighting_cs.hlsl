@@ -54,6 +54,7 @@ Texture2D t_ShadowBuffer : register(t16);
 Texture2D t_AmbientOcclusion : register(t17);
 
 RWTexture2D<float4> u_Output : register(u0);
+RWTexture2D<float> u_ShadowHint : register(u1);
 
 float GetRandom(float2 pos)
 {
@@ -83,6 +84,7 @@ void main(int2 i_globalIdx : SV_DispatchThreadID)
 
     float3 diffuseTerm = 0;
     float3 specularTerm = 0;
+    float shadowHintVisibility = 1;
     float angle = GetRandom(i_globalIdx.xy + g_Deferred.randomOffset);
     float2 sincos = float2(sin(angle), cos(angle));
 
@@ -135,6 +137,7 @@ void main(int2 i_globalIdx : SV_DispatchThreadID)
         }
 
         shadow *= objectShadow;
+        shadowHintVisibility = min(shadowHintVisibility, shadow);
 
         float3 diffuseRadiance, specularRadiance;
         ShadeSurface(light, surfaceMaterial, surfaceWorldPos, viewIncident, diffuseRadiance, specularRadiance);
@@ -212,6 +215,7 @@ void main(int2 i_globalIdx : SV_DispatchThreadID)
     float3 outputColor = diffuseTerm
         + specularTerm
         + surfaceMaterial.emissiveColor;
-    
+
     u_Output[pixelPosition] = float4(outputColor, 0);
+    u_ShadowHint[pixelPosition] = shadowHintVisibility;
 }

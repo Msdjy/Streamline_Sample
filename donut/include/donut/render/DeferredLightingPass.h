@@ -77,6 +77,7 @@ namespace donut::render
             nvrhi::ITexture* shadowChannels = nullptr;
             nvrhi::ITexture* ambientOcclusion = nullptr;
             nvrhi::ITexture* output = nullptr;
+            nvrhi::ITexture* shadowHintOutput = nullptr;
 
             const std::vector<std::shared_ptr<engine::Light>>* lights = nullptr;
             const std::vector<std::shared_ptr<engine::LightProbe>>* lightProbes = nullptr;

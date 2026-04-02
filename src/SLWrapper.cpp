@@ -544,6 +544,7 @@ void SLWrapper::Shutdown()
         sl::ResourceTag{nullptr, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent},
         sl::ResourceTag{nullptr, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eValidUntilPresent},
         sl::ResourceTag{nullptr, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eValidUntilPresent},
+        sl::ResourceTag{nullptr, sl::kBufferTypeShadowHint, sl::ResourceLifecycle::eValidUntilPresent},
         sl::ResourceTag{nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent} };
     successCheck(SetTag(inputs, _countof(inputs), nullptr), "slSetTag_clear");
 
@@ -1240,12 +1241,19 @@ namespace {
         TextureInfo depth;
         TextureInfo motionVectors;
         TextureInfo hudlessColor;
+        TextureInfo shadowHint;
         float tagCpuAccum = 0.0f;
         int frameCount = 0;
         std::chrono::steady_clock::time_point lastLogTime = std::chrono::steady_clock::now();
         std::chrono::high_resolution_clock::time_point tagStartTime;
     };
     static GeneralResourceStats s_generalStats;
+
+    struct FGSRFGTagStats {
+        float tagCpuAccum = 0.0f;
+        int frameCount = 0;
+    };
+    static FGSRFGTagStats s_fgsrFGTagStats;
 
     const char* nvrhiFormatToString(nvrhi::Format fmt) {
         switch (fmt) {
@@ -1755,6 +1763,49 @@ void SLWrapper::CleanupFGSR_SR(bool wfi) {
 #endif
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG
+void SLWrapper::TagResources_FGSR_FG(
+    nvrhi::ICommandList* commandList,
+    const donut::engine::IView* view,
+    nvrhi::ITexture* motionVectors,
+    nvrhi::ITexture* depth,
+    nvrhi::ITexture* finalColorHudless,
+    nvrhi::ITexture* shadowHint)
+{
+    if (!m_sl_initialised) {
+        log::warning("Streamline not initialised.");
+        return;
+    }
+
+    s_generalStats.tagStartTime = std::chrono::high_resolution_clock::now();
+    s_generalStats.depth.Set(depth);
+    s_generalStats.motionVectors.Set(motionVectors);
+    s_generalStats.hudlessColor.Set(finalColorHudless);
+    s_generalStats.shadowHint.Set(shadowHint);
+
+    sl::Extent renderExtent{ 0, 0, depth->getDesc().width, depth->getDesc().height };
+    sl::Extent fullExtent{ 0, 0, finalColorHudless->getDesc().width, finalColorHudless->getDesc().height };
+    void* cmdbuffer = GetNativeCommandList(commandList);
+    sl::Resource motionVectorsResource{}, depthResource{}, finalColorHudlessResource{}, shadowHintResource{};
+
+    GetSLResource(commandList, motionVectorsResource, motionVectors, view);
+    GetSLResource(commandList, depthResource, depth, view);
+    GetSLResource(commandList, finalColorHudlessResource, finalColorHudless, view);
+    GetSLResource(commandList, shadowHintResource, shadowHint, view);
+
+    sl::ResourceTag motionVectorsResourceTag = sl::ResourceTag{ &motionVectorsResource, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
+    sl::ResourceTag depthResourceTag = sl::ResourceTag{ &depthResource, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent };
+    sl::ResourceTag finalColorHudlessResourceTag = sl::ResourceTag{ &finalColorHudlessResource, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent, &fullExtent };
+    sl::ResourceTag shadowHintResourceTag = sl::ResourceTag{ &shadowHintResource, sl::kBufferTypeShadowHint, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent };
+
+    sl::ResourceTag inputs[] = { motionVectorsResourceTag, depthResourceTag, finalColorHudlessResourceTag, shadowHintResourceTag };
+    successCheck(SetTag(inputs, _countof(inputs), cmdbuffer), "slSetTag_FGSR_FG");
+
+    auto tagEnd = std::chrono::high_resolution_clock::now();
+    float tagMs = std::chrono::duration<float, std::milli>(tagEnd - s_generalStats.tagStartTime).count();
+    s_fgsrFGTagStats.tagCpuAccum += tagMs;
+    s_fgsrFGTagStats.frameCount++;
+}
+
 // Function pointer type for slSetFGSR_FGConstants
 using PFun_slSetFGSR_FGConstants = sl::Result(const void* data, uint32_t frameIndex, uint32_t id);
 static PFun_slSetFGSR_FGConstants* s_slSetFGSR_FGConstants = nullptr;
@@ -1839,22 +1890,23 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - s_fgsrFGStats.lastLogTime).count();
     if (elapsed >= 1000) {
-        float avgGeneralTagMs = s_generalStats.frameCount > 0 ? s_generalStats.tagCpuAccum / s_generalStats.frameCount : 0.0f;
+        float avgFGTagMs = s_fgsrFGTagStats.frameCount > 0 ? s_fgsrFGTagStats.tagCpuAccum / s_fgsrFGTagStats.frameCount : 0.0f;
         float avgCpuMs = s_fgsrFGStats.evalCpuAccum / s_fgsrFGStats.frameCount;
         float fps = s_fgsrFGStats.frameCount * 1000.0f / elapsed;
 
         // 合并所有日志为一条，避免丢失
         log::info("\n[Sample FGSR_FG] ==================== Stats (%.1f fps) ====================\n"
             "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
-            "[Sample FGSR_FG] | All Textures Passed to SDK (from TagResources_General)                 |\n"
+            "[Sample FGSR_FG] | All Textures Passed to SDK (from TagResources_FGSR_FG)                 |\n"
             "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
             "[Sample FGSR_FG] |   Depth:          %4ux%-4u  %-20s                       |\n"
             "[Sample FGSR_FG] |   MotionVectors:  %4ux%-4u  %-20s                       |\n"
             "[Sample FGSR_FG] |   HudlessColor:   %4ux%-4u  %-20s                       |\n"
+            "[Sample FGSR_FG] |   ShadowHint:     %4ux%-4u  %-20s                       |\n"
             "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
             "[Sample FGSR_FG] | SDK Call CPU Timing (avg per frame)                                     |\n"
             "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
-            "[Sample FGSR_FG] |   TagGeneral:  %7.3f ms  (Depth/MV/HudlessColor)                       |\n"
+            "[Sample FGSR_FG] |   TagFGSR_FG: %7.3f ms  (Depth/MV/HudlessColor/ShadowHint)           |\n"
             "[Sample FGSR_FG] |   Evaluate:    %7.3f ms  (slEvaluateFeature call)                      |\n"
             "[Sample FGSR_FG] |   Total:       %7.3f ms                                                 |\n"
             "[Sample FGSR_FG] +-------------------------------------------------------------------------+\n"
@@ -1864,10 +1916,13 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
             s_generalStats.depth.width, s_generalStats.depth.height, nvrhiFormatToString(s_generalStats.depth.format),
             s_generalStats.motionVectors.width, s_generalStats.motionVectors.height, nvrhiFormatToString(s_generalStats.motionVectors.format),
             s_generalStats.hudlessColor.width, s_generalStats.hudlessColor.height, nvrhiFormatToString(s_generalStats.hudlessColor.format),
-            avgGeneralTagMs,
+            s_generalStats.shadowHint.width, s_generalStats.shadowHint.height, nvrhiFormatToString(s_generalStats.shadowHint.format),
+            avgFGTagMs,
             avgCpuMs,
-            avgGeneralTagMs + avgCpuMs);
+            avgFGTagMs + avgCpuMs);
 
+        s_fgsrFGTagStats.tagCpuAccum = 0.0f;
+        s_fgsrFGTagStats.frameCount = 0;
         s_fgsrFGStats.evalCpuAccum = 0.0f;
         s_fgsrFGStats.frameCount = 0;
         s_fgsrFGStats.lastLogTime = now;

@@ -607,6 +607,13 @@ public:
 #endif
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG
+    virtual void TagResources_FGSR_FG(
+        nvrhi::ICommandList *commandList,
+        const donut::engine::IView *view,
+        nvrhi::ITexture *motionVectors,
+        nvrhi::ITexture *depth,
+        nvrhi::ITexture *finalColorHudless,
+        nvrhi::ITexture *shadowHint) = 0;
     virtual void SetFGSR_FGOptions(const sl::FGSR_FGConstants consts) = 0;
     bool GetFGSR_FGAvailable() { return m_fgsr_fg_available; }
     bool GetFGSR_FGLastEnable() { return m_fgsr_fg_consts.mode != sl::FGSR_FGMode::eOff; }

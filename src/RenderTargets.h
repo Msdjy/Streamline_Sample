@@ -56,6 +56,7 @@ public:
     nvrhi::TextureHandle AmbientOcclusion;
     nvrhi::TextureHandle NisColor;
     nvrhi::TextureHandle PreUIColor;
+    nvrhi::TextureHandle ShadowHint;
     nvrhi::TextureHandle UIColorAndAlpha; // UI texture with alpha for FGSR_FG AddUI
     nvrhi::TextureHandle FGSR_SROutput;  // Dedicated output for FGSR_SR
     nvrhi::TextureHandle FGSR_SRInput;   // renderSize 8-bit LDR input for FGSR_SR
@@ -230,6 +231,16 @@ public:
         desc.debugName = "PreUIColor";
         PreUIColor = device->createTexture(desc);
 
+        desc.width = renderSize.x;
+        desc.height = renderSize.y;
+        desc.format = nvrhi::Format::R8_UNORM;
+        desc.isUAV = true;
+        desc.initialState = nvrhi::ResourceStates::ShaderResource;
+        desc.debugName = "ShadowHint";
+        ShadowHint = device->createTexture(desc);
+
+        desc.width = displaySize.x;
+        desc.height = displaySize.y;
         // UIColorAndAlpha: displaySize, same format as backbuffer for UI texture used by FGSR_FG AddUI
         // Must be UAV for UI extraction compute shader output
         desc.format = backbufferFormat;
@@ -260,6 +271,7 @@ public:
                 GBufferEmissiveRR,
                 ColorspaceCorrectionColor,
                 PreUIColor,
+                ShadowHint,
                 UIColorAndAlpha,  // UI texture for FGSR_FG AddUI
                 FGSR_SROutput,
                 FGSR_SRInput,
@@ -346,6 +358,7 @@ public:
         commandList->clearTextureFloat(LdrColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(NisColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(PreUIColor, nvrhi::AllSubresources, nvrhi::Color(0.f));
+        commandList->clearTextureFloat(ShadowHint, nvrhi::AllSubresources, nvrhi::Color(1.f));
         commandList->clearTextureFloat(UIColorAndAlpha, nvrhi::AllSubresources, nvrhi::Color(0.f));  // Clear UI texture
         commandList->clearTextureFloat(FGSR_SROutput, nvrhi::AllSubresources, nvrhi::Color(0.f));
         commandList->clearTextureFloat(FGSR_SRInput, nvrhi::AllSubresources, nvrhi::Color(0.f));

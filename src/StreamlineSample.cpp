@@ -1419,6 +1419,7 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         deferredInputs.ambientColorBottom = m_AmbientBottom;
         deferredInputs.lights = &m_Scene->GetSceneGraph()->GetLights();
         deferredInputs.output = m_RenderTargets->HdrColor;
+        deferredInputs.shadowHintOutput = m_RenderTargets->ShadowHint;
 
         m_DeferredLightingPass->Render(m_CommandList, *m_View, deferredInputs);
     }
@@ -1869,11 +1870,12 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
         nvrhi::ITexture* mvToTag = m_ui.Global_UseUnjitteredPass
             ? m_RenderTargets->UnjitteredMV
             : m_RenderTargets->MotionVectors;
-        NVWrapper::Get().TagResources_General(m_CommandList,
+        NVWrapper::Get().TagResources_FGSR_FG(m_CommandList,
             m_View->GetChildView(ViewType::PLANAR, 0),
             mvToTag,
             depthToTag,
-            m_RenderTargets->PreUIColor);
+            m_RenderTargets->PreUIColor,
+            m_RenderTargets->ShadowHint);
 
         NVWrapper::Get().EvaluateFGSR_FG(m_CommandList);
     }

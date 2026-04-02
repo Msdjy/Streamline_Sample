@@ -91,6 +91,24 @@ public:
         nvrhi::ITexture *depth,
         nvrhi::ITexture *finalColorHudless) override;
 
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    void TagResources_FGSR_FG(
+        nvrhi::ICommandList *commandList,
+        const donut::engine::IView *view,
+        nvrhi::ITexture *motionVectors,
+        nvrhi::ITexture *depth,
+        nvrhi::ITexture *finalColorHudless,
+        nvrhi::ITexture *shadowHint) override
+    {
+        (void)commandList;
+        (void)view;
+        (void)motionVectors;
+        (void)depth;
+        (void)finalColorHudless;
+        (void)shadowHint;
+    }
+#endif
+
     void TagResources_DLSS_NIS(
         nvrhi::ICommandList *commandList,
         const donut::engine::IView *view,

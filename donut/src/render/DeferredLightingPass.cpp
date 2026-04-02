@@ -105,6 +105,7 @@ void donut::render::DeferredLightingPass::Init(const std::shared_ptr<engine::Sha
             nvrhi::BindingLayoutItem::Texture_SRV(16),
             nvrhi::BindingLayoutItem::Texture_SRV(17),
             nvrhi::BindingLayoutItem::Texture_UAV(0),
+            nvrhi::BindingLayoutItem::Texture_UAV(1),
             nvrhi::BindingLayoutItem::Sampler(0),
             nvrhi::BindingLayoutItem::Sampler(1),
             nvrhi::BindingLayoutItem::Sampler(2),
@@ -137,6 +138,7 @@ void DeferredLightingPass::Render(
     assert(inputs.gbufferSpecular);
     assert(inputs.gbufferEmissive);
     assert(inputs.output);
+    assert(inputs.shadowHintOutput);
 
     commandList->beginMarker("DeferredLighting");
 
@@ -277,6 +279,7 @@ void DeferredLightingPass::Render(
             nvrhi::BindingSetItem::Texture_SRV(16, inputs.shadowChannels ? inputs.shadowChannels : m_CommonPasses->m_BlackTexture.Get()),
             nvrhi::BindingSetItem::Texture_SRV(17, inputs.ambientOcclusion ? inputs.ambientOcclusion : m_CommonPasses->m_WhiteTexture.Get(), nvrhi::Format::UNKNOWN, viewSubresources),
             nvrhi::BindingSetItem::Texture_UAV(0, inputs.output, nvrhi::Format::UNKNOWN, viewSubresources),
+            nvrhi::BindingSetItem::Texture_UAV(1, inputs.shadowHintOutput, nvrhi::Format::UNKNOWN, viewSubresources),
             nvrhi::BindingSetItem::Sampler(0, m_ShadowSampler),
             nvrhi::BindingSetItem::Sampler(1, m_ShadowSamplerComparison),
             nvrhi::BindingSetItem::Sampler(2, m_CommonPasses->m_LinearWrapSampler),

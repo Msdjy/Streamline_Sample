@@ -181,6 +181,13 @@ public:
 #endif
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG
+    void TagResources_FGSR_FG(
+        nvrhi::ICommandList* commandList,
+        const donut::engine::IView* view,
+        nvrhi::ITexture* motionVectors,
+        nvrhi::ITexture* depth,
+        nvrhi::ITexture* finalColorHudless,
+        nvrhi::ITexture* shadowHint) override;
     void SetFGSR_FGOptions(const sl::FGSR_FGConstants consts) override;
     void EvaluateFGSR_FG(nvrhi::ICommandList* commandList) override;
     void CleanupFGSR_FG(bool wfi) override;
