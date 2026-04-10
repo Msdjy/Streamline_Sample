@@ -35,6 +35,7 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <filesystem>
 
 #include <donut/core/vfs/VFS.h>
 #include <donut/core/log.h>
@@ -78,6 +79,10 @@
 #include "UIData.h"
 
 #include "DeviceManagerOverride/DeviceManagerOverride.h"
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 sl::Extent UIData::getExtent(uint32_t fullWidth, uint32_t fullHeight, uint32_t uV)
 {
@@ -129,15 +134,27 @@ void logToFile(donut::log::Severity s, char const* txt) {
     }
 };
 
+static std::filesystem::path GetDefaultLogPath()
+{
+#ifdef _WIN32
+    char exePath[MAX_PATH] = {};
+    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH) != 0)
+    {
+        return std::filesystem::path(exePath).parent_path() / "sample_log.log";
+    }
+#endif
+    return std::filesystem::current_path() / "sample_log.log";
+}
+
 bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCreationParameters& deviceParams, std::string& sceneName, bool& checkSig, bool& enableSLlog, bool& useNewSLSetTagAPI, bool& allowSMSCG)
 {
     // 默认开启日志文件输出到固定路径
-    const char* logPath = "E:\\workspace\\dlss\\sample_log.log";
+    auto logPath = GetDefaultLogPath();
     log_file = std::ofstream(logPath);
     if (log_file.is_open()) {
-        printf("Log file created: %s\n", logPath);
+        printf("Log file created: %s\n", logPath.string().c_str());
     } else {
-        printf("Failed to create log file: %s\n", logPath);
+        printf("Failed to create log file: %s\n", logPath.string().c_str());
     }
     donut::log::SetCallback(&logToFile);
     donut::log::SetMinSeverity(donut::log::Severity::Info);
