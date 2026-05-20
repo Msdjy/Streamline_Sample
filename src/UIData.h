@@ -239,6 +239,10 @@ public:
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
     int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
 
+    // History sampling options
+    int                                 FGSR_SR_UseBicubicHistory = 0;     // 0=bilinear, 1=9-tap Catmull-Rom, 2=16-tap Catmull-Rom
+    int                                 FGSR_SR_DebugHistorySampling = 0;  // 0=off, 1=9-tap, 2=bilinear, 3=bilinear|9-tap, 4=16-tap, 5=9-tap|16-tap, 6=selected after clamp/flow
+
     // 2x 模型选择
     bool                                FGSR_SR_UseOur2xModel = false;  // false=原版, true=我们的
 

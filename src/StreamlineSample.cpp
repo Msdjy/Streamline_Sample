@@ -1621,6 +1621,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             // Blend 选项
             fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
             fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+            fgsr_sr_consts.useBicubicHistory = (uint32_t)m_ui.FGSR_SR_UseBicubicHistory;
+            fgsr_sr_consts.debugHistorySampling = (uint32_t)m_ui.FGSR_SR_DebugHistorySampling;
 
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;
@@ -1750,6 +1752,8 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
             // Blend 选项
             fgsr_sr_consts.useNewBlendLogic = m_ui.FGSR_SR_UseNewBlendLogic ? 1 : 0;
             fgsr_sr_consts.debugOutput = (uint32_t)m_ui.FGSR_SR_DebugOutput;
+            fgsr_sr_consts.useBicubicHistory = (uint32_t)m_ui.FGSR_SR_UseBicubicHistory;
+            fgsr_sr_consts.debugHistorySampling = (uint32_t)m_ui.FGSR_SR_DebugHistorySampling;
 
             // 2x 模型选择
             fgsr_sr_consts.useOur2xModel = m_ui.FGSR_SR_UseOur2xModel ? 1 : 0;

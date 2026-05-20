@@ -622,7 +622,17 @@ protected:
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Enable new blend shader logic (adapts to high-res input)");
 
-                // ========== Jitter Fix 选项 ==========
+                // ========== History Sampling 选项 ==========
+                ImGui::Separator();
+                ImGui::Text("History Sampling");
+                ImGui::SameLine();
+                ImGui::Combo("##FGSR_SR History Sampling", &m_ui.FGSR_SR_UseBicubicHistory,
+                    "Bilinear\0"
+                    "Catmull-Rom 9-tap\0"
+                    "Catmull-Rom 16-tap\0");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("0=single bilinear tap\n1=Catmull-Rom 9-tap history\n2=Catmull-Rom 16-tap history");
+
                 // ========== Debug 选项 ==========
                 ImGui::Separator();
                 ImGui::Text("Debug Output");
@@ -631,6 +641,19 @@ protected:
                     "Normal\0Color\0MV\0Depth\0");
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("0=Normal, 1=Color, 2=MV, 3=Depth");
+
+                ImGui::Text("Debug History Sampling");
+                ImGui::SameLine();
+                ImGui::Combo("##FGSR_SR Debug History", &m_ui.FGSR_SR_DebugHistorySampling,
+                    "Off\0"
+                    "9-tap Only\0"
+                    "Bilinear Only\0"
+                    "Bilinear | 9-tap\0"
+                    "16-tap Only\0"
+                    "9-tap | 16-tap\0"
+                    "Selected After Clamp/Flow\0");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("0=off\n1=show 9-tap Catmull-Rom history\n2=show bilinear history\n3=left bilinear / right 9-tap\n4=show 16-tap Catmull-Rom history\n5=left 9-tap / right 16-tap\n6=selected history after AABB clamp and flow weighting");
             }
 
             // 计算 UpsampleMode (由 UseTRT + TRTBackend 决定，具体模型由 ScaleFactor 决定)
