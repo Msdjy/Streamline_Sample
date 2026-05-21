@@ -237,7 +237,7 @@ public:
 
     // Blend 选项
     bool                                FGSR_SR_UseNewBlendLogic = true;  // Blend shader 新逻辑开关
-    int                                 FGSR_SR_DebugOutput = 0;      // 0=正常, 1=color, 2=mv, 3=depth
+    int                                 FGSR_SR_DebugOutput = 0;      // 0=正常; 1-15 见 FGSR Debug Output UI / sl_fgsr_sr.h
 
     // History sampling options
     int                                 FGSR_SR_UseBicubicHistory = 0;     // 0=bilinear, 1=9-tap Catmull-Rom, 2=16-tap Catmull-Rom

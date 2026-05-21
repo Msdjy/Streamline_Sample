@@ -638,9 +638,32 @@ protected:
                 ImGui::Text("Debug Output");
                 ImGui::SameLine();
                 ImGui::Combo("##FGSR_SR Debug Output", &m_ui.FGSR_SR_DebugOutput,
-                    "Normal\0Color\0MV\0Depth\0");
+                    "Normal\0"
+                    "Upsampled Color\0"
+                    "Dilated MV\0"
+                    "Dilated Depth\0"
+                    "Input MV (Tagged)\0"
+                    "Input Depth (Tagged)\0"
+                    "Input Color\0"
+                    "History Color\0"
+                    "History Depth\0"
+                    "Blend Result\0"
+                    "Split MV In|Dilated\0"
+                    "Split Depth In|Dilated\0"
+                    "MV Diff Heat\0"
+                    "Depth Diff Heat\0"
+                    "Input MV Validity\0"
+                    "Input Depth Validity\0");
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("0=Normal, 1=Color, 2=MV, 3=Depth");
+                    ImGui::SetTooltip(
+                        "0=Normal\n"
+                        "1=Upsampled color (upOutput)\n"
+                        "2=Dilated MV  3=Dilated depth\n"
+                        "4=Tagged input MV (host/Unjittered pass)  5=Tagged input depth\n"
+                        "6=Input color  7=History color  8=History depth  9=Blend result\n"
+                        "10=Split input|dilated MV  11=Split input|dilated depth\n"
+                        "12=MV diff heat  13=Depth diff heat\n"
+                        "14=Input MV validity (red=empty)  15=Input depth validity");
 
                 ImGui::Text("Debug History Sampling");
                 ImGui::SameLine();
