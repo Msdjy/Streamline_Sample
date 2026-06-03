@@ -160,6 +160,9 @@ if(USE_SL)
         "src/SLWrapper.cpp"
         "src/NVWrapper.cpp"
         "src/UnjitteredDepthMVPass.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSample.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSampleDx.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSampleVk.cpp"
     )
     # Find all HLSL files in the src/shaders directory
     set(folder "StreamlineSampleFolder")
@@ -190,6 +193,9 @@ else()
         "src/NGXWrapper.cpp"
         "src/NVWrapper.cpp"
         "src/UnjitteredDepthMVPass.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSample.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSampleDx.cpp"
+        "src/fgsr_fg_sample/FGSR_FgSampleVk.cpp"
     )
 endif()
     file(GLOB src_overrides 

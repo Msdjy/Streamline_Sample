@@ -36,6 +36,9 @@
 #include "StreamlineSample.h"
 #include "NVWrapper.h"
 #include "UIData.h"
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+#include "fgsr_fg_sample/FGSR_FgSample.h"
+#endif
 
 #include <donut/app/DeviceManager.h>
 #include <imgui_internal.h>
@@ -69,12 +72,34 @@ private:
     bool    m_last_rt_mode = false;
     bool    m_rt_changed = false;
 
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+    sl::FGSR_FGMode m_prev_fg_mode = sl::FGSR_FGMode::eOff;
+
+    void SyncFGSR_FGPluginConstants()
+    {
+        if (!NVWrapper::Get().GetFGSR_FGAvailable())
+        {
+            return;
+        }
+        sl::FGSR_FGConstants c{};
+        c.mode = m_ui.FGSR_FG_Mode;
+        c.FPS = m_ui.FGSR_FG_FPS;
+        c.delta = m_ui.FGSR_FG_Delta;
+        c.mockMVMode = m_ui.FGSR_FG_MockMVMode;
+        NVWrapper::Get().SetFGSR_FGOptions(c);
+    }
+#endif
+
 
 public:
     UIRenderer(DeviceManager* deviceManager, std::shared_ptr<StreamlineSample> app, UIData& ui)
         : ImGui_Renderer(deviceManager)
         , m_app(app)
         , m_ui(ui) {
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+        m_prev_fg_mode = m_ui.FGSR_FG_Mode;
+        fgsr_fg_sample::SetSwapchainRecreatePostCallback([this]() { SyncFGSR_FGPluginConstants(); });
+#endif
 
         // IMGUI by default writes in srgb colorSpace, but our back buffer is in rgb, we will simply pre-empt this by gamma shifting the colors.
         auto invGamma = 1.f / 2.2f;
@@ -184,12 +209,13 @@ protected:
             ImGui::Text("True FPS: %.0f ", m_ui.DLSSG_fps);
         }
         // Vsync
-        if (m_ui.DLSSG_mode != sl::DLSSGMode::eOff && !m_dev_view) {
+        bool lockVsyncForDlssG = (m_ui.DLSSG_mode != sl::DLSSGMode::eOff && !m_dev_view);
+        if (lockVsyncForDlssG) {
             pushDisabled();
             m_ui.EnableVsync = false;
         }
         ImGui::Checkbox("VSync", &m_ui.EnableVsync);
-        if (m_ui.DLSSG_mode != sl::DLSSGMode::eOff && !m_dev_view) {
+        if (lockVsyncForDlssG) {
             popDisabled();
         }
 
@@ -714,7 +740,33 @@ protected:
             ImGui::Text("Mode");
             ImGui::SameLine();
             ImGui::Combo("##FGSR_FGMode", &fgsr_fg_mode, "Off\0On\0");
-            m_ui.FGSR_FG_Mode = (fgsr_fg_mode == 1) ? sl::FGSR_FGMode::eOn : sl::FGSR_FGMode::eOff;
+            const sl::FGSR_FGMode newFgMode = (fgsr_fg_mode == 1) ? sl::FGSR_FGMode::eOn : sl::FGSR_FGMode::eOff;
+            if (newFgMode != m_ui.FGSR_FG_Mode)
+            {
+                m_ui.FGSR_FG_Mode = newFgMode;
+                if (newFgMode != m_prev_fg_mode)
+                {
+                    const bool fgOn = (newFgMode == sl::FGSR_FGMode::eOn);
+                    const auto api = GetDeviceManager()->GetGraphicsAPI();
+                    // Vulkan: keep plugin Off until swapchain recreate finishes (see FGSR_FgSampleVk).
+                    if (api == nvrhi::GraphicsAPI::VULKAN && fgOn)
+                    {
+                        sl::FGSR_FGConstants c{};
+                        c.mode = sl::FGSR_FGMode::eOff;
+                        c.FPS = m_ui.FGSR_FG_FPS;
+                        c.delta = m_ui.FGSR_FG_Delta;
+                        c.mockMVMode = m_ui.FGSR_FG_MockMVMode;
+                        NVWrapper::Get().SetFGSR_FGOptions(c);
+                    }
+                    fgsr_fg_sample::OnFgModeChanged(api, fgOn, [this]() { SyncFGSR_FGPluginConstants(); });
+                    m_prev_fg_mode = newFgMode;
+                }
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Vulkan: FG On recreates swapchain next frame (extra image headroom).\n"
+                    "DX12: 3 swapchain buffers, no recreate; sync FG constants only.\n"
+                    "Do not run FG and FGSR_SR together on Vulkan.");
 
             // MockMV Mode
             ImGui::Separator();
@@ -737,7 +789,10 @@ protected:
                 ImGui::InputInt("##FGSR_FG_FPS", &m_ui.FGSR_FG_FPS);
                 if (m_ui.FGSR_FG_FPS < 0) m_ui.FGSR_FG_FPS = 0;
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Target FPS for frame generation\n0 = no frame rate limit");
+                    ImGui::SetTooltip(
+                        "Base render FPS for FG (not display refresh).\n"
+                        "30 = app renders ~30fps, FG presents interp+real -> ~60fps display (same as DX).\n"
+                        "0 = no present pacing limit");
 
                 // Delta
                 ImGui::Text("Blend Delta");

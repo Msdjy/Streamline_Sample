@@ -77,6 +77,9 @@
 #include "StreamlineSample.h"
 #include "UIRenderer.h"
 #include "UIData.h"
+#if USE_SL
+#include "fgsr_fg_sample/FGSR_FgSample.h"
+#endif
 
 #include "DeviceManagerOverride/DeviceManagerOverride.h"
 
@@ -199,6 +202,10 @@ bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCre
         {
             enableSLlog = true;
         }
+        else if (!_stricmp(argv[i], "-fgsrfg") || !_stricmp(argv[i], "-FGSR_FG_on"))
+        {
+            // Parsed again in ScriptingConfig; recognized here to avoid "Unrecognized option".
+        }
         else if (!_stricmp(argv[i], "-scene"))
         {
             sceneName = argv[i];
@@ -286,6 +293,10 @@ int main(int __argc, const char* const* __argv)
 
     auto scripting = ScriptingConfig(__argc, __argv);
 
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+    fgsr_fg_sample::ConfigureDeviceStartup(api, deviceParams, scripting.FGSR_FG_on == 1);
+#endif
+
 #ifdef _DEBUG
     checkSig = false;
 #endif
@@ -360,6 +371,19 @@ int main(int __argc, const char* const* __argv)
 
         deviceManager->AddRenderPassToBack(pApp.get());
         deviceManager->AddRenderPassToBack(gui.get());
+
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+        {
+            auto prevBeforeFrame = deviceManager->m_callbacks.beforeFrame;
+            deviceManager->m_callbacks.beforeFrame = [prevBeforeFrame](donut::app::DeviceManager& dm, uint32_t frameIdx) {
+                fgsr_fg_sample::ProcessPendingFrameStart(&dm);
+                if (prevBeforeFrame)
+                {
+                    prevBeforeFrame(dm, frameIdx);
+                }
+            };
+        }
+#endif
 
         deviceManager->RunMessageLoop();
     }

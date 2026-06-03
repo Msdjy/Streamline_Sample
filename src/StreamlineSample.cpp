@@ -48,6 +48,8 @@
 #include <vulkan/vulkan.h>
 #include <nvrhi/vulkan.h>
 #include <../src/vulkan/vulkan-backend.h>
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+#endif
 #endif
 
 using namespace donut;
@@ -203,6 +205,23 @@ StreamlineSample::StreamlineSample(
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
     // FGSR_SR will be controlled via UI
+#endif
+
+#ifdef STREAMLINE_FEATURE_FGSR_FG
+    if (m_ScriptingConfig.FGSR_FG_on == 1 && NVWrapper::Get().GetFGSR_FGAvailable())
+    {
+        m_ui.FGSR_FG_Mode = sl::FGSR_FGMode::eOn;
+        donut::log::info("FGSR_FG enabled at startup (-fgsrfg); Vulkan env / DXGI buffers set in main before swapchain create");
+        if (NVWrapper::Get().GetFGSR_FGAvailable())
+        {
+            sl::FGSR_FGConstants c{};
+            c.mode = sl::FGSR_FGMode::eOn;
+            c.FPS = m_ui.FGSR_FG_FPS;
+            c.delta = m_ui.FGSR_FG_Delta;
+            c.mockMVMode = m_ui.FGSR_FG_MockMVMode;
+            NVWrapper::Get().SetFGSR_FGOptions(c);
+        }
+    }
 #endif
 
     if (m_ScriptingConfig.DLSSG_on != -1 && NVWrapper::Get().GetDLSSGAvailable() && NVWrapper::Get().GetReflexAvailable()) {
@@ -1916,7 +1935,12 @@ void StreamlineSample::RenderScene(nvrhi::IFramebuffer* framebuffer)
     // 注意：FGSR LDR 模式已经移到 ToneMapping 之前处理 (正确的流程：540p HDR → 540p LDR → FGSR上采样)
     // 旧的错误 LDR 流程已删除 (之前是 1080p ToneMap → downscale 到 540p → FGSR upscale)
 
-    NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
+#if defined(STREAMLINE_FEATURE_FGSR_FG)
+    if (!(NVWrapper::Get().GetFGSR_FGAvailable() && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff))
+#endif
+    {
+        NVWrapper::Get().TagResources_DLSS_FG(m_CommandList, validViewportExtent, m_backbufferViewportExtent);
+    }
 
     //
     // DO DEEPDVC

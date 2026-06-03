@@ -276,8 +276,8 @@ bool SLWrapper::Initialize_preDevice(nvrhi::GraphicsAPI api)
         return false;
     }
 
-    // turn off dlssg
-    if (api == nvrhi::GraphicsAPI::D3D12) {
+    // DLSS-G present/async swapchain path conflicts with FGSR_FG Vulkan double-present insert.
+    if (api == nvrhi::GraphicsAPI::D3D12 || api == nvrhi::GraphicsAPI::VULKAN) {
         slSetFeatureLoaded(sl::kFeatureDLSS_G, false);
     }
 
@@ -1948,7 +1948,8 @@ void SLWrapper::CleanupFGSR_FG(bool wfi) {
 
     sl::Result result = slFreeResources(sl::kFeatureFGSR_FG, m_viewport);
     // add an exception for eErrorMissingOrInvalidAPI for FGSR_FG plugin that doesn't export slFreeResources
-    successCheck((result == sl::Result::eErrorMissingOrInvalidAPI ? sl::Result::eOk : result), "slFreeResources_FGSR_FG");
+    successCheck((result == sl::Result::eErrorMissingOrInvalidAPI || result == sl::Result::eErrorInvalidParameter
+        ? sl::Result::eOk : result), "slFreeResources_FGSR_FG");
 }
 
 // Function pointer type for slFGSR_FGAddUI
@@ -2083,9 +2084,13 @@ void SLWrapper::SetReflexConsts(const sl::ReflexOptions options)
 }
 
 void SLWrapper::ReflexCallback_Sleep(donut::app::DeviceManager& manager, uint32_t frameID) {
-    if (SLWrapper::Get().GetReflexAvailable()) {
-        successCheck(slGetNewFrameToken(SLWrapper::Get().m_currentFrame, &frameID), "SL_GetFrameToken");
-        successCheck(slReflexSleep(*SLWrapper::Get().m_currentFrame), "Reflex_Sleep");
+    if (m_sl_initialised)
+    {
+        successCheck(slGetNewFrameToken(m_currentFrame, &frameID), "SL_GetFrameToken");
+    }
+    if (GetReflexAvailable())
+    {
+        successCheck(slReflexSleep(*m_currentFrame), "Reflex_Sleep");
     }
 }
 

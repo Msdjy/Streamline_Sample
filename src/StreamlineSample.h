@@ -85,6 +85,7 @@ struct ScriptingConfig {
     int DLSSG_numFrameToGenerate = -1;
     int DeepDVC_on = -1;
     int Latewarp_on = -1;
+    int FGSR_FG_on = -1;
     int GpuLoad = -1;
     sl::Extent viewportExtent{};
 
@@ -141,6 +142,12 @@ struct ScriptingConfig {
             else if (!strcmp(argv[i], "-Latewarp_on"))
             {
                 Latewarp_on = 1;
+            }
+
+            // FGSR_FG (auto-enable frame generation for debug runs)
+            else if (!strcmp(argv[i], "-fgsrfg") || !strcmp(argv[i], "-FGSR_FG_on"))
+            {
+                FGSR_FG_on = 1;
             }
 
             else if (!strcmp(argv[i], "-viewport"))
