@@ -82,6 +82,8 @@ public:
     bool EnumerateAdapters(std::vector<donut::app::AdapterInfo>& outAdapters) override;
     const donut::app::DeviceCreationParameters& GetDeviceParams() const { return m_DeviceParams; };
 
+    void EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight) override;
+
 protected:
     bool CreateInstanceInternal() override;
     bool CreateDevice() override;

@@ -425,6 +425,13 @@ void DeviceManager::BackBufferResizing()
     }
 }
 
+void DeviceManager::RecreateSwapChain()
+{
+    BackBufferResizing();
+    ResizeSwapChain();
+    BackBufferResized();
+}
+
 void DeviceManager::BackBufferResized()
 {
     for(auto it : m_vRenderPasses)

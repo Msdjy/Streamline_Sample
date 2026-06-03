@@ -51,12 +51,17 @@ freely, subject to the following restrictions:
 #include <queue>
 #include <unordered_set>
 #include <memory>
+#include <cstdlib>
 
 #include <donut/app/DeviceManager.h>
 #include <donut/app/DeviceManager_VK.h>
 
 #include <nvrhi/vulkan.h>
 #include <nvrhi/validation.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #if DONUT_WITH_STREAMLINE
 #include <StreamlineIntegration.h>
@@ -1017,7 +1022,9 @@ bool DeviceManager_VK::CreateDevice()
     deviceDesc.aftermathEnabled = m_DeviceParams.enableAftermath;
 #endif
 
+    log::info("[FGSR_DEBUG] before nvrhi::vulkan::createDevice");
     m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
+    log::info("[FGSR_DEBUG] after nvrhi::vulkan::createDevice");
 
     if (m_DeviceParams.enableNvrhiValidationLayer)
     {
@@ -1042,7 +1049,9 @@ bool DeviceManager_VK::CreateDevice()
 
 bool DeviceManager_VK::CreateSwapChain()
 {
+    log::info("[FGSR_DEBUG] before createSwapChain (minImageCount=%u)", m_DeviceParams.swapChainBufferCount);
     CHECK(createSwapChain())
+    log::info("[FGSR_DEBUG] after createSwapChain (images=%u)", (uint32_t)m_SwapChainImages.size());
 
     m_PresentSemaphores.reserve(m_DeviceParams.maxFramesInFlight + 1);
     m_AcquireSemaphores.reserve(m_DeviceParams.maxFramesInFlight + 1);
@@ -1105,6 +1114,31 @@ void DeviceManager_VK::DestroyDeviceAndSwapChain()
         m_VulkanInstance.destroy();
         m_VulkanInstance = nullptr;
     }
+}
+
+void DeviceManager_VK::EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight)
+{
+    if (maxFramesInFlight <= m_DeviceParams.maxFramesInFlight)
+    {
+        return;
+    }
+
+    m_DeviceParams.maxFramesInFlight = maxFramesInFlight;
+
+    if (!m_VulkanDevice)
+    {
+        return;
+    }
+
+    const uint32_t targetSemaphoreCount = m_DeviceParams.maxFramesInFlight + 1;
+    while (m_PresentSemaphores.size() < targetSemaphoreCount)
+    {
+        m_PresentSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
+        m_AcquireSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
+    }
+
+    log::info("FGSR VK Sample: expanded WSI depth maxFramesInFlight=%u (semaphores=%u)",
+        m_DeviceParams.maxFramesInFlight, targetSemaphoreCount);
 }
 
 bool DeviceManager_VK::BeginFrame()
@@ -1208,6 +1242,40 @@ bool DeviceManager_VK::Present()
     m_NvrhiDevice->resetEventQuery(query);
     m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
     m_FramesInFlight.push(query);
+
+    // FGSR_FG Vulkan insert presents twice per app Present(); account for both WSI presents in flight depth.
+    bool fgDoublePresentActive = false;
+#ifdef _WIN32
+    {
+        char buf[8]{};
+        if (GetEnvironmentVariableA("FGSR_FG_VK_DOUBLE_PRESENT", buf, static_cast<DWORD>(sizeof(buf))) > 0)
+        {
+            fgDoublePresentActive = (buf[0] == '1');
+        }
+    }
+#else
+    if (const char* fgDoublePresent = std::getenv("FGSR_FG_VK_DOUBLE_PRESENT"))
+    {
+        fgDoublePresentActive = (fgDoublePresent[0] == '1');
+    }
+#endif
+    if (fgDoublePresentActive)
+    {
+        nvrhi::EventQueryHandle query2;
+        if (!m_QueryPool.empty())
+        {
+            query2 = m_QueryPool.back();
+            m_QueryPool.pop_back();
+        }
+        else
+        {
+            query2 = m_NvrhiDevice->createEventQuery();
+        }
+        m_NvrhiDevice->resetEventQuery(query2);
+        m_NvrhiDevice->setEventQuery(query2, nvrhi::CommandQueue::Graphics);
+        m_FramesInFlight.push(query2);
+    }
+
     return true;
 }
 

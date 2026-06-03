@@ -324,6 +324,7 @@ namespace donut::app
         void SetFrameTimeUpdateInterval(double seconds) { m_AverageTimeUpdateInterval = seconds; }
         [[nodiscard]] bool IsVsyncEnabled() const { return m_DeviceParams.vsyncEnabled; }
         virtual void SetVsyncEnabled(bool enabled) { m_RequestedVSync = enabled; /* will be processed later */ }
+        void SetSwapChainBufferCount(uint32_t bufferCount) { m_DeviceParams.swapChainBufferCount = bufferCount; }
         virtual void ReportLiveObjects() {}
         void SetEnableRenderDuringWindowMovement(bool val) {m_EnableRenderDuringWindowMovement = val;} 
 
@@ -356,6 +357,12 @@ namespace donut::app
         void SetWindowTitle(const char* title);
         void SetInformativeWindowTitle(const char* applicationName, bool includeFramerate = true, const char* extraInfo = nullptr);
         const char* GetWindowTitle();
+
+        // Recreate swapchain (e.g. Vulkan FG toggled in UI changes WSI image count).
+        void RecreateSwapChain();
+
+        // FG Vulkan double-present needs deeper WSI sync; expand at runtime when UI enables FG.
+        virtual void EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight) { (void)maxFramesInFlight; }
 
         virtual bool IsVulkanInstanceExtensionEnabled(const char* extensionName) const { return false; }
         virtual bool IsVulkanDeviceExtensionEnabled(const char* extensionName) const { return false; }
