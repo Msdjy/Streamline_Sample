@@ -137,22 +137,36 @@ void logToFile(donut::log::Severity s, char const* txt) {
     }
 };
 
-static std::filesystem::path GetDefaultLogPath()
+static const char* GetDefaultLogFileName(nvrhi::GraphicsAPI api)
+{
+    switch (api)
+    {
+    case nvrhi::GraphicsAPI::D3D11:
+    case nvrhi::GraphicsAPI::D3D12:
+        return "sample_log_dx.log";
+    case nvrhi::GraphicsAPI::VULKAN:
+        return "sample_log_vk.log";
+    default:
+        return "sample_log.log";
+    }
+}
+
+static std::filesystem::path GetDefaultLogPath(nvrhi::GraphicsAPI api)
 {
 #ifdef _WIN32
     char exePath[MAX_PATH] = {};
     if (GetModuleFileNameA(nullptr, exePath, MAX_PATH) != 0)
     {
-        return std::filesystem::path(exePath).parent_path() / "sample_log.log";
+        return std::filesystem::path(exePath).parent_path() / GetDefaultLogFileName(api);
     }
 #endif
-    return std::filesystem::current_path() / "sample_log.log";
+    return std::filesystem::current_path() / GetDefaultLogFileName(api);
 }
 
-bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCreationParameters& deviceParams, std::string& sceneName, bool& checkSig, bool& enableSLlog, bool& useNewSLSetTagAPI, bool& allowSMSCG)
+bool ProcessCommandLine(int argc, const char* const* argv, nvrhi::GraphicsAPI api, donut::app::DeviceCreationParameters& deviceParams, std::string& sceneName, bool& checkSig, bool& enableSLlog, bool& useNewSLSetTagAPI, bool& allowSMSCG)
 {
     // 默认开启日志文件输出到固定路径
-    auto logPath = GetDefaultLogPath();
+    auto logPath = GetDefaultLogPath(api);
     log_file = std::ofstream(logPath);
     if (log_file.is_open()) {
         printf("Log file created: %s\n", logPath.string().c_str());
@@ -187,7 +201,7 @@ bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCre
         }
         else if (!_stricmp(argv[i], "-logToFile"))
         {
-            log_file = std::ofstream("log.txt");
+            log_file = std::ofstream(GetDefaultLogPath(api));
             donut::log::SetCallback(&logToFile);
         }
         else if (!_stricmp(argv[i], "-noSigCheck"))
@@ -290,7 +304,7 @@ int main(int __argc, const char* const* __argv)
     bool SLlog = false;
     bool useNewSLSetTagAPI = true;
     bool allowSMSCG = false;
-    if (!ProcessCommandLine(__argc, __argv, deviceParams, sceneName, checkSig, SLlog, useNewSLSetTagAPI, allowSMSCG))
+    if (!ProcessCommandLine(__argc, __argv, api, deviceParams, sceneName, checkSig, SLlog, useNewSLSetTagAPI, allowSMSCG))
     {
         donut::log::error("Failed to process the command line.");
         return 1;
