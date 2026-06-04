@@ -86,6 +86,7 @@ struct ScriptingConfig {
     int DeepDVC_on = -1;
     int Latewarp_on = -1;
     int FGSR_FG_on = -1;
+    int FGSR_SR_on = -1;
     int GpuLoad = -1;
     sl::Extent viewportExtent{};
 
@@ -148,6 +149,19 @@ struct ScriptingConfig {
             else if (!strcmp(argv[i], "-fgsrfg") || !strcmp(argv[i], "-FGSR_FG_on"))
             {
                 FGSR_FG_on = 1;
+            }
+            // FGSR_SR (auto-enable super-resolution for debug runs)
+            else if (!strcmp(argv[i], "-fgsrSr") || !strcmp(argv[i], "-FGSR_SR_on"))
+            {
+                FGSR_SR_on = 1;
+            }
+            else if (!_stricmp(argv[i], "-fgsrSrNoTrt"))
+            {
+                // Recognized in main.cpp ProcessCommandLine; ignore here.
+            }
+            else if (!_stricmp(argv[i], "-fgsrSrHdr"))
+            {
+                // Recognized in main.cpp ProcessCommandLine; ignore here.
             }
 
             else if (!strcmp(argv[i], "-viewport"))

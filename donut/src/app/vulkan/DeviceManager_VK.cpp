@@ -775,6 +775,8 @@ bool DeviceManager_VK::createWindowSurface()
 
 void DeviceManager_VK::destroySwapChain()
 {
+    DrainGpuFramesInFlight();
+
     if (m_VulkanDevice)
     {
         m_VulkanDevice.waitIdle();
@@ -787,6 +789,8 @@ void DeviceManager_VK::destroySwapChain()
     }
 
     m_SwapChainImages.clear();
+    m_AcquireSemaphoreIndex = 0;
+    m_PresentSemaphoreIndex = 0;
 }
 
 bool DeviceManager_VK::createSwapChain()
@@ -1141,9 +1145,33 @@ void DeviceManager_VK::EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight)
         m_DeviceParams.maxFramesInFlight, targetSemaphoreCount);
 }
 
+void DeviceManager_VK::DrainGpuFramesInFlight()
+{
+    if (!m_NvrhiDevice)
+    {
+        return;
+    }
+
+    while (!m_FramesInFlight.empty())
+    {
+        nvrhi::EventQueryHandle query = m_FramesInFlight.front();
+        m_FramesInFlight.pop();
+        m_NvrhiDevice->waitEventQuery(query);
+        m_QueryPool.push_back(query);
+    }
+}
+
 bool DeviceManager_VK::BeginFrame()
 {
+    static uint32_t s_fgsrVkBeginFrameDebugCount = 0;
     const auto& semaphore = m_AcquireSemaphores[m_AcquireSemaphoreIndex];
+
+    const uint32_t debugFrame = s_fgsrVkBeginFrameDebugCount++;
+    if (debugFrame < 64)
+    {
+        log::info("[FGSR_DEBUG][VK] BeginFrame #%u acquireSemIdx=%u framesInFlight=%zu",
+            debugFrame, m_AcquireSemaphoreIndex, m_FramesInFlight.size());
+    }
 
     vk::Result res;
 
@@ -1174,6 +1202,12 @@ bool DeviceManager_VK::BeginFrame()
 
     m_AcquireSemaphoreIndex = (m_AcquireSemaphoreIndex + 1) % m_AcquireSemaphores.size();
 
+    if (debugFrame < 64)
+    {
+        log::info("[FGSR_DEBUG][VK] BeginFrame #%u acquire result=%s image=%u nextAcquireSemIdx=%u",
+            debugFrame, nvrhi::vulkan::resultToString(VkResult(res)), m_SwapChainIndex, m_AcquireSemaphoreIndex);
+    }
+
     if (res == vk::Result::eSuccess)
     {
         // Schedule the wait. The actual wait operation will be submitted when the app executes any command list.
@@ -1186,7 +1220,15 @@ bool DeviceManager_VK::BeginFrame()
 
 bool DeviceManager_VK::Present()
 {
+    static uint32_t s_fgsrVkPresentDebugCount = 0;
     const auto& semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
+
+    const uint32_t debugPresent = s_fgsrVkPresentDebugCount++;
+    if (debugPresent < 64)
+    {
+        log::info("[FGSR_DEBUG][VK] Present #%u start image=%u presentSemIdx=%u framesInFlight=%zu",
+            debugPresent, m_SwapChainIndex, m_PresentSemaphoreIndex, m_FramesInFlight.size());
+    }
 
     m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
 
@@ -1202,6 +1244,11 @@ bool DeviceManager_VK::Present()
                                 .setPImageIndices(&m_SwapChainIndex);
 
     const vk::Result res = m_PresentQueue.presentKHR(&info);
+    if (debugPresent < 64)
+    {
+        log::info("[FGSR_DEBUG][VK] Present #%u vkQueuePresentKHR result=%s image=%u",
+            debugPresent, nvrhi::vulkan::resultToString(VkResult(res)), m_SwapChainIndex);
+    }
     if (!(res == vk::Result::eSuccess || res == vk::Result::eErrorOutOfDateKHR))
     {
         return false;
@@ -1223,7 +1270,16 @@ bool DeviceManager_VK::Present()
         auto query = m_FramesInFlight.front();
         m_FramesInFlight.pop();
 
+        if (debugPresent < 64)
+        {
+            log::info("[FGSR_DEBUG][VK] Present #%u waitEventQuery before wait remaining=%zu maxFrames=%u",
+                debugPresent, m_FramesInFlight.size(), m_DeviceParams.maxFramesInFlight);
+        }
         m_NvrhiDevice->waitEventQuery(query);
+        if (debugPresent < 64)
+        {
+            log::info("[FGSR_DEBUG][VK] Present #%u waitEventQuery done", debugPresent);
+        }
 
         m_QueryPool.push_back(query);
     }
@@ -1274,6 +1330,12 @@ bool DeviceManager_VK::Present()
         m_NvrhiDevice->resetEventQuery(query2);
         m_NvrhiDevice->setEventQuery(query2, nvrhi::CommandQueue::Graphics);
         m_FramesInFlight.push(query2);
+    }
+
+    if (debugPresent < 64)
+    {
+        log::info("[FGSR_DEBUG][VK] Present #%u end framesInFlight=%zu fgDoublePresentActive=%s",
+            debugPresent, m_FramesInFlight.size(), fgDoublePresentActive ? "true" : "false");
     }
 
     return true;

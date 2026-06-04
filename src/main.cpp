@@ -206,6 +206,11 @@ bool ProcessCommandLine(int argc, const char* const* argv, donut::app::DeviceCre
         {
             // Parsed again in ScriptingConfig; recognized here to avoid "Unrecognized option".
         }
+        else if (!_stricmp(argv[i], "-fgsrSr") || !_stricmp(argv[i], "-FGSR_SR_on")
+            || !_stricmp(argv[i], "-fgsrSrNoTrt") || !_stricmp(argv[i], "-fgsrSrHdr"))
+        {
+            // Parsed again in ScriptingConfig / startup UI; recognized here to avoid "Unrecognized option".
+        }
         else if (!_stricmp(argv[i], "-scene"))
         {
             sceneName = argv[i];

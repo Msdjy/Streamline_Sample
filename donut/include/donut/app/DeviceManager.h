@@ -364,6 +364,11 @@ namespace donut::app
         // FG Vulkan double-present needs deeper WSI sync; expand at runtime when UI enables FG.
         virtual void EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight) { (void)maxFramesInFlight; }
 
+        // Vulkan: drain in-flight GPU frame queries before swapchain recreate (FG toggle).
+        virtual void DrainGpuFramesInFlight() {}
+
+        void SetMaxFramesInFlight(uint32_t count) { m_DeviceParams.maxFramesInFlight = count; }
+
         virtual bool IsVulkanInstanceExtensionEnabled(const char* extensionName) const { return false; }
         virtual bool IsVulkanDeviceExtensionEnabled(const char* extensionName) const { return false; }
         virtual bool IsVulkanLayerEnabled(const char* layerName) const { return false; }

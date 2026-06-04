@@ -84,6 +84,8 @@ public:
 
     void EnsureVulkanFgWsiDepth(uint32_t maxFramesInFlight) override;
 
+    void DrainGpuFramesInFlight() override;
+
 protected:
     bool CreateInstanceInternal() override;
     bool CreateDevice() override;

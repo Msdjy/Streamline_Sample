@@ -79,14 +79,8 @@ void OnFgModeChanged(bool fgEnabled, const std::function<void()>& syncFgConstant
 #endif
 
     g_swapchainRecreatePending = true;
-    g_deferPluginSyncAfterRecreate = fgEnabled;
-    donut::log::info("FGSR VK Sample: queued swapchain recreate (deferPluginSync=%s)",
-        fgEnabled ? "true" : "false");
-
-    if (!fgEnabled && syncFgConstants)
-    {
-        syncFgConstants();
-    }
+    g_deferPluginSyncAfterRecreate = true;
+    donut::log::info("FGSR VK Sample: queued swapchain recreate (deferPluginSync=true)");
 }
 
 void SetSwapchainRecreatePostCallback(std::function<void()> callback)
@@ -121,9 +115,15 @@ void ProcessPendingFrameStart(donut::app::DeviceManager* deviceManager)
     donut::log::info("FGSR VK Sample: recreating swapchain (FGSR_FG_VK_DOUBLE_PRESENT=%s)",
         fgEnvActive ? "1" : "0");
 
+    deviceManager->DrainGpuFramesInFlight();
+
     if (fgEnvActive)
     {
         deviceManager->EnsureVulkanFgWsiDepth(kFgVkMaxFramesInFlight);
+    }
+    else
+    {
+        deviceManager->SetMaxFramesInFlight(kDefaultVkMaxFramesInFlight);
     }
 
     deviceManager->RecreateSwapChain();

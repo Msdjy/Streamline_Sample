@@ -204,7 +204,14 @@ StreamlineSample::StreamlineSample(
 #endif // STREAMLINE_FEATURE_DLSS_RR
 
 #ifdef STREAMLINE_FEATURE_FGSR_SR
-    // FGSR_SR will be controlled via UI
+    if (m_ScriptingConfig.FGSR_SR_on == 1 && NVWrapper::Get().GetFGSR_SRAvailable())
+    {
+        m_ui.FGSR_SR_Mode = sl::FGSR_SRMode::eEveryFrameUpsampleBlend;
+        m_ui.FGSR_SR_UseTRT = true;
+        m_ui.FGSR_SR_UpsampleMode = sl::FGSR_UpsampleMode::eTRT_CS;
+        m_ui.FGSR_SR_ScaleFactor = 2;
+        donut::log::info("FGSR_SR enabled at startup (-fgsrSr)");
+    }
 #endif
 
 #ifdef STREAMLINE_FEATURE_FGSR_FG

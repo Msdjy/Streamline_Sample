@@ -12,6 +12,7 @@ namespace fgsr_fg_sample
 {
 
 constexpr uint32_t kFgVkMaxFramesInFlight = 6;
+constexpr uint32_t kDefaultVkMaxFramesInFlight = 3;
 
 // main.cpp before CreateDeviceManager.
 void ConfigureDeviceStartup(nvrhi::GraphicsAPI api, donut::app::DeviceCreationParameters& deviceParams, bool fgEnabledFromCmdLine);
