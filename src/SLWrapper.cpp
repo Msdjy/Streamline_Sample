@@ -1872,6 +1872,7 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
     // CPU 计时开始
     auto cpuStart = std::chrono::high_resolution_clock::now();
 
+    log::info("[Sample FGSR_FG][ui-sync] EvaluateFGSR_FG call frame=%u viewport=%u nativeCmd=%p", (uint32_t)*m_currentFrame, (uint32_t)m_viewport, nativeCommandList);
     sl::Result evalRes = slEvaluateFeature(sl::kFeatureFGSR_FG, *m_currentFrame, inputs, _countof(inputs), nativeCommandList);
 
     // CPU 计时结束
@@ -1880,6 +1881,9 @@ void SLWrapper::EvaluateFGSR_FG(nvrhi::ICommandList* commandList) {
 
     if (evalRes != sl::Result::eOk) {
         log::warning("slEvaluateFeature FGSR_FG failed with result: %d", (int)evalRes);
+    }
+    else {
+        log::info("[Sample FGSR_FG][ui-sync] EvaluateFGSR_FG ok frame=%u viewport=%u cpuMs=%.3f", (uint32_t)*m_currentFrame, (uint32_t)m_viewport, cpuMs);
     }
 
     // 累积统计
@@ -2016,9 +2020,20 @@ void SLWrapper::AddUI_FGSR_FG(
     sl::ViewportHandle viewHandle(m_viewport);
     const sl::BaseStructure* slInputs[] = { &viewHandle };
 
+    log::info(
+        "[Sample FGSR_FG][ui-sync] AddUI_FGSR_FG call frame=%u viewport=%u nativeCmd=%p uiTexture=%p %ux%u",
+        (uint32_t)*m_currentFrame,
+        (uint32_t)m_viewport,
+        nativeCommandList,
+        uiColorAndAlpha,
+        uiColorAndAlpha->getDesc().width,
+        uiColorAndAlpha->getDesc().height);
     sl::Result callRes = s_slFGSR_FGAddUI(nativeCommandList, (uint32_t)m_viewport, *m_currentFrame, slInputs, _countof(slInputs));
     if (callRes != sl::Result::eOk) {
         log::warning("slFGSR_FGAddUI failed with result: %d", (int)callRes);
+    }
+    else {
+        log::info("[Sample FGSR_FG][ui-sync] AddUI_FGSR_FG ok frame=%u viewport=%u", (uint32_t)*m_currentFrame, (uint32_t)m_viewport);
     }
 
     commandList->clearState();

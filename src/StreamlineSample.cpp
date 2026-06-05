@@ -2085,13 +2085,18 @@ void StreamlineSample::InitUIExtractionPass()
     // t0: Backbuffer with UI (SRV)
     // t1: PreUIColor without UI (SRV)
     // u0: Output UI texture (UAV)
+    // u1: UI stats counter (UAV)
     // b0: Constants
     nvrhi::BindingLayoutDesc layoutDesc;
     layoutDesc.visibility = nvrhi::ShaderType::Compute;
+    layoutDesc.bindingOffsets.setShaderResourceOffset(200);
+    layoutDesc.bindingOffsets.setConstantBufferOffset(300);
+    layoutDesc.bindingOffsets.setUnorderedAccessViewOffset(400);
     layoutDesc.bindings = {
         nvrhi::BindingLayoutItem::Texture_SRV(0),      // t0: Backbuffer (with UI)
         nvrhi::BindingLayoutItem::Texture_SRV(1),      // t1: PreUIColor (without UI)
         nvrhi::BindingLayoutItem::Texture_UAV(0),      // u0: Output UI
+        nvrhi::BindingLayoutItem::RawBuffer_UAV(1),     // u1: UI pixel counter
         nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)  // b0: Constants
     };
     m_UIExtractionBindingLayout = GetDevice()->createBindingLayout(layoutDesc);
@@ -2110,6 +2115,21 @@ void StreamlineSample::InitUIExtractionPass()
     cbDesc.debugName = "UIExtractionConstants";
     cbDesc.maxVersions = 16;
     m_UIExtractionConstantBuffer = GetDevice()->createBuffer(cbDesc);
+
+    nvrhi::BufferDesc statsDesc;
+    statsDesc.byteSize = sizeof(uint32_t) * 9;
+    statsDesc.canHaveUAVs = true;
+    statsDesc.canHaveRawViews = true;
+    statsDesc.initialState = nvrhi::ResourceStates::CopySource;
+    statsDesc.keepInitialState = true;
+    statsDesc.debugName = "UIExtractionStats";
+    m_UIExtractionStatsBuffer = GetDevice()->createBuffer(statsDesc);
+
+    statsDesc.canHaveUAVs = false;
+    statsDesc.canHaveRawViews = false;
+    statsDesc.cpuAccess = nvrhi::CpuAccessMode::Read;
+    statsDesc.debugName = "UIExtractionStatsReadback";
+    m_UIExtractionStatsReadbackBuffer = GetDevice()->createBuffer(statsDesc);
 
     m_UIExtractionInitialized = true;
     log::info("UI Extraction compute shader initialized");
@@ -2135,6 +2155,7 @@ void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::IText
     constants.colorDiffThreshold = 1.0f / 255.0f;  // ~1 color level difference to detect UI
     constants.padding = 0.0f;
     m_CommandList->writeBuffer(m_UIExtractionConstantBuffer, &constants, sizeof(constants));
+    m_CommandList->clearBufferUInt(m_UIExtractionStatsBuffer, 0);
 
     // Create binding set for this dispatch
     nvrhi::BindingSetDesc bindingSetDesc;
@@ -2142,6 +2163,7 @@ void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::IText
         nvrhi::BindingSetItem::Texture_SRV(0, backbuffer),     // t0: with UI
         nvrhi::BindingSetItem::Texture_SRV(1, preUIColor),     // t1: without UI
         nvrhi::BindingSetItem::Texture_UAV(0, outputUI),
+        nvrhi::BindingSetItem::RawBuffer_UAV(1, m_UIExtractionStatsBuffer),
         nvrhi::BindingSetItem::ConstantBuffer(0, m_UIExtractionConstantBuffer)
     };
     nvrhi::BindingSetHandle bindingSet = GetDevice()->createBindingSet(bindingSetDesc, m_UIExtractionBindingLayout);
@@ -2156,6 +2178,7 @@ void StreamlineSample::RunUIExtraction(nvrhi::ITexture* backbuffer, nvrhi::IText
     const uint32_t groupsX = (width + 7) / 8;
     const uint32_t groupsY = (height + 7) / 8;
     m_CommandList->dispatch(groupsX, groupsY, 1);
+    m_CommandList->copyBuffer(m_UIExtractionStatsReadbackBuffer, 0, m_UIExtractionStatsBuffer, 0, sizeof(uint32_t) * 9);
 }
 
 void StreamlineSample::BeforeUIRender(nvrhi::IFramebuffer* backbufferFramebuffer)
@@ -2176,19 +2199,77 @@ void StreamlineSample::AfterUIRender(nvrhi::IFramebuffer* backbufferFramebuffer)
 
     if (NVWrapper::Get().GetFGSR_FGAvailable() && m_ui.FGSR_FG_Mode != sl::FGSR_FGMode::eOff)
     {
+        const auto backbufferDesc = backbufferTexture->getDesc();
+        const auto preUIDesc = m_RenderTargets->PreUIColor->getDesc();
+        const auto uiDesc = m_RenderTargets->UIColorAndAlpha->getDesc();
+        log::info(
+            "[Sample FGSR_FG][ui-sync] AfterUIRender begin mode=%d backbuffer=%p %ux%u PreUIColor=%p %ux%u UIColorAndAlpha=%p %ux%u",
+            (int)m_ui.FGSR_FG_Mode,
+            backbufferTexture,
+            backbufferDesc.width,
+            backbufferDesc.height,
+            m_RenderTargets->PreUIColor.Get(),
+            preUIDesc.width,
+            preUIDesc.height,
+            m_RenderTargets->UIColorAndAlpha.Get(),
+            uiDesc.width,
+            uiDesc.height);
+
         m_CommandList->open();
 
         // Diff-based UI extraction: compare backbuffer (scene + UI) vs PreUIColor (scene only)
         // Pixels that differ are UI; pixels that match are scene (output transparent)
         RunUIExtraction(backbufferTexture, m_RenderTargets->PreUIColor, m_RenderTargets->UIColorAndAlpha);
+        log::info("[Sample FGSR_FG][ui-sync] RunUIExtraction dispatched");
 
         // Call AddUI with the extracted UI texture
         NVWrapper::Get().AddUI_FGSR_FG(m_CommandList,
             m_View->GetChildView(ViewType::PLANAR, 0),
             m_RenderTargets->UIColorAndAlpha);
+        log::info("[Sample FGSR_FG][ui-sync] AddUI_FGSR_FG submitted on UI command list");
 
         m_CommandList->close();
         GetDevice()->executeCommandList(m_CommandList);
+        if (m_UIExtractionStatsReadbackBuffer)
+        {
+            void* statsData = GetDevice()->mapBuffer(m_UIExtractionStatsReadbackBuffer, nvrhi::CpuAccessMode::Read);
+            if (statsData)
+            {
+                const uint32_t* stats = static_cast<const uint32_t*>(statsData);
+                const uint32_t uiPixelCount = stats[0];
+                const uint32_t backNonZeroPixels = stats[1];
+                const uint32_t preUINonZeroPixels = stats[2];
+                const uint32_t backAlphaPixels = stats[3];
+                const uint32_t preUIAlphaPixels = stats[4];
+                const uint32_t exactRGBMatchPixels = stats[5];
+                const uint32_t tinyRGBDiffPixels = stats[6];
+                const uint32_t thresholdRGBDiffPixels = stats[7];
+                const uint32_t dispatchSentinelPixels = stats[8];
+                const uint64_t totalPixels = uint64_t(uiDesc.width) * uint64_t(uiDesc.height);
+                const double uiPixelPercent = totalPixels > 0
+                    ? (double(uiPixelCount) * 100.0 / double(totalPixels))
+                    : 0.0;
+                log::info(
+                    "[Sample FGSR_FG][ui-sync] UIExtraction stats alphaPixels=%u backNonZero=%u preUINonZero=%u backAlpha=%u preUIAlpha=%u exactRGBMatch=%u tinyRGBDiff=%u thresholdRGBDiff=%u dispatchSentinel=%u totalPixels=%llu coverage=%.4f%%",
+                    uiPixelCount,
+                    backNonZeroPixels,
+                    preUINonZeroPixels,
+                    backAlphaPixels,
+                    preUIAlphaPixels,
+                    exactRGBMatchPixels,
+                    tinyRGBDiffPixels,
+                    thresholdRGBDiffPixels,
+                    dispatchSentinelPixels,
+                    (unsigned long long)totalPixels,
+                    uiPixelPercent);
+                GetDevice()->unmapBuffer(m_UIExtractionStatsReadbackBuffer);
+            }
+            else
+            {
+                log::warning("[Sample FGSR_FG][ui-sync] UIExtraction stats readback map failed");
+            }
+        }
+        log::info("[Sample FGSR_FG][ui-sync] AfterUIRender end command list executed");
     }
 }
 
@@ -2363,4 +2444,3 @@ void StreamlineSample::RenderSplashScreen(nvrhi::IFramebuffer* framebuffer)
     GetDevice()->executeCommandList(m_CommandList);
     GetDeviceManager()->SetVsyncEnabled(true);
 }
-

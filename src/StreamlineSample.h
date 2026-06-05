@@ -285,6 +285,8 @@ private:
     nvrhi::ComputePipelineHandle                    m_UIExtractionPipeline;
     nvrhi::BindingLayoutHandle                      m_UIExtractionBindingLayout;
     nvrhi::BufferHandle                             m_UIExtractionConstantBuffer;
+    nvrhi::BufferHandle                             m_UIExtractionStatsBuffer;
+    nvrhi::BufferHandle                             m_UIExtractionStatsReadbackBuffer;
     bool                                            m_UIExtractionInitialized = false;
 
     // Initialize UI extraction compute shader
